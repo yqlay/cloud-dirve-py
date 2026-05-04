@@ -47,6 +47,23 @@ app = Flask(__name__)
 sock = Sock(app)
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
+# 抑制 Werkzeug 访问日志，避免跟控制台输入抢输出
+from werkzeug.serving import WSGIRequestHandler as _WSGIReqHandler
+
+
+class _QuietHandler(_WSGIReqHandler):
+    def log_request(self, code="-", size="-"):
+        pass
+
+    def log(self, *args):
+        pass
+
+    def log_error(self, *args):
+        pass
+
+    def log_date_time_string(self):
+        return ""
+
 # 自动生成并持久化 secret key
 _secret = get("server", "secret_key")
 if not _secret:
@@ -1580,7 +1597,7 @@ def terminal_ws(ws):
     try:
         sid, pty, history = _term_get_or_create(sid_arg)
     except Exception as e:
-        print(f"[terminal-ws] PTY 创建失败: {e}")
+        logger.log("terminal-ws", "PTY 创建失败", str(e))
         ws.close()
         return
 
@@ -1653,7 +1670,7 @@ def terminal_ws(ws):
             if not reader.is_alive():
                 break
     except Exception as e:
-        print(f"[terminal-ws] 异常: {e}")
+        logger.log("terminal-ws", "异常", str(e))
     finally:
         stop_event.set()
 
@@ -1723,4 +1740,4 @@ if __name__ == "__main__":
     # 启动控制台消息监听线程
     threading.Thread(target=_console_input, daemon=True).start()
 
-    app.run(host=host, port=port, debug=debug, use_reloader=False)
+    app.run(host=host, port=port, debug=debug, use_reloader=False, request_handler=_QuietHandler)

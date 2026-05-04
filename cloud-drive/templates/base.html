@@ -980,22 +980,26 @@
   // 恢复终端状态
   _termRestoreState();
 
-  // SPA 初始化：根据当前 URL 设置 _currentPage
+  // SPA 初始化：根据当前 URL 显示对应页面（force 确保刷新后 DOM 状态正确）
   (function() {
     const path = location.pathname;
     const query = location.search;
-    if (path === '/admin/terminal') {
-      _currentPage = _cacheKey('admin/terminal', '');
-    } else if (path.startsWith('/folder/') || path === '/') {
+    let slug = null;
+    if (path === '/admin/terminal') slug = 'admin/terminal';
+    else if (path === '/logs') slug = 'logs';
+    else if (path === '/settings') slug = 'settings';
+    else if (path === '/admin/registrations') slug = 'admin/registrations';
+    else if (path === '/admin/online') slug = 'admin/online';
+    else if (path.startsWith('/folder/') || path === '/') {
+      // 文件页：服务端已渲染，只需标记当前页
       _currentPage = _cacheKey('files', query);
-    } else if (path === '/logs') {
-      _currentPage = 'logs';
-    } else if (path === '/settings') {
-      _currentPage = 'settings';
-    } else if (path === '/admin/registrations') {
-      _currentPage = 'admin/registrations';
-    } else if (path === '/admin/online') {
-      _currentPage = 'admin/online';
+      _initialPage = _currentPage;
+      const activeLink = document.querySelector('.sidebar a[data-page="files"]');
+      if (activeLink) activeLink.classList.add('active');
+      return;
+    }
+    if (slug) {
+      spaNav(slug, {force: true});
     }
   })();
 
