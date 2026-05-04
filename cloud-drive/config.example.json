@@ -15,7 +15,8 @@
     "enabled": false
   },
   "terminal": {
-    "enabled": true
+    "enabled": true,
+    "timeout_minutes": 40
   },
   "upload": {
     "max_file_size_mb": 5120,

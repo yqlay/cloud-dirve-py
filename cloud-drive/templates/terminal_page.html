@@ -9,10 +9,44 @@
 <style>
   html, body { margin:0; padding:0; height:100%; background:#0c0e14; overflow:hidden; }
   #terminal { height:100%; }
+  #reconnect-overlay {
+    display:none; position:fixed; inset:0; z-index:100;
+    background:rgba(0,0,0,0.55); backdrop-filter:blur(3px);
+    align-items:center; justify-content:center;
+  }
+  #reconnect-box {
+    background:#1a1d27; border:1px solid #333; border-radius:12px;
+    padding:1.8rem 2rem; min-width:320px; text-align:center;
+    box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  }
+  #reconnect-box h3 { margin:0 0 0.3rem; color:#e0e0e0; font-size:1rem; }
+  #reconnect-box p { margin:0 0 1.2rem; color:#888; font-size:0.82rem; }
+  #reconnect-box .btn-group { display:flex; flex-direction:column; gap:0.5rem; }
+  #reconnect-box button {
+    padding:0.55rem 1rem; border-radius:8px; border:1px solid #444;
+    cursor:pointer; font-size:0.85rem; transition:all 0.15s;
+  }
+  #reconnect-box .btn-reconnect { background:#2563eb; color:#fff; border-color:#2563eb; }
+  #reconnect-box .btn-reconnect:hover { background:#1d4ed8; }
+  #reconnect-box .btn-close-tab { background:transparent; color:#e0e0e0; }
+  #reconnect-box .btn-close-tab:hover { background:#2a2d37; }
+  #reconnect-box .btn-dismiss { background:transparent; color:#888; border-color:#333; }
+  #reconnect-box .btn-dismiss:hover { color:#bbb; border-color:#555; }
 </style>
 </head>
 <body>
 <div id="terminal"></div>
+<div id="reconnect-overlay">
+  <div id="reconnect-box">
+    <h3>连接已断开</h3>
+    <p>终端与服务器的连接已断开</p>
+    <div class="btn-group">
+      <button class="btn-reconnect" onclick="doReconnect()">重新连接</button>
+      <button class="btn-close-tab" onclick="doClose()">关闭该终端</button>
+      <button class="btn-dismiss" onclick="doDismiss()">取消</button>
+    </div>
+  </div>
+</div>
 <script>
 const term = new Terminal({
   theme: {
@@ -32,52 +66,74 @@ setTimeout(() => fitAddon.fit(), 100);
 
 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 const hashParams = new URLSearchParams(location.hash.substring(1));
-const sessionId = hashParams.get('session') || '';
-const wsUrl = sessionId
-  ? `${proto}//${location.host}/terminal-ws?session=${sessionId}`
-  : `${proto}//${location.host}/terminal-ws`;
-const ws = new WebSocket(wsUrl);
+let sessionId = hashParams.get('session') || '';
+let ws = null;
+let pingTimer = null;
 
-ws.onopen = () => {
-  ws.send(JSON.stringify({type: 'resize', cols: term.cols, rows: term.rows}));
-};
+function connect() {
+  const wsUrl = sessionId
+    ? `${proto}//${location.host}/terminal-ws?session=${sessionId}`
+    : `${proto}//${location.host}/terminal-ws`;
+  ws = new WebSocket(wsUrl);
 
-ws.onmessage = (e) => {
-  const data = e.data;
-  if (data.startsWith('{')) {
-    try {
-      const msg = JSON.parse(data);
-      if (msg.type === 'session') {
-        hashParams.set('session', msg.session_id);
-        location.hash = hashParams.toString();
-        try { parent.postMessage({type: 'session', session_id: msg.session_id}, '*'); } catch(_){}
-        return;
-      }
-      if (msg.type === 'replay_done') return;
-    } catch(_) {}
-  }
-  term.write(data);
-  try { parent.postMessage({type: 'output', data: data}, '*'); } catch(_){}
-};
+  ws.onopen = () => {
+    document.getElementById('reconnect-overlay').style.display = 'none';
+    ws.send(JSON.stringify({type: 'resize', cols: term.cols, rows: term.rows}));
+    if (pingTimer) clearInterval(pingTimer);
+    pingTimer = setInterval(() => {
+      if (ws.readyState === 1) ws.send(JSON.stringify({type: 'ping'}));
+    }, 30000);
+  };
 
-setInterval(() => {
-  if (ws.readyState === 1) ws.send(JSON.stringify({type: 'ping'}));
-}, 30000);
+  ws.onmessage = (e) => {
+    const data = e.data;
+    if (data.startsWith('{')) {
+      try {
+        const msg = JSON.parse(data);
+        if (msg.type === 'session') {
+          sessionId = msg.session_id;
+          hashParams.set('session', sessionId);
+          location.hash = hashParams.toString();
+          try { parent.postMessage({type: 'session', session_id: sessionId}, '*'); } catch(_){}
+          return;
+        }
+        if (msg.type === 'replay_done') return;
+      } catch(_) {}
+    }
+    term.write(data);
+    try { parent.postMessage({type: 'output', data: data}, '*'); } catch(_){}
+  };
 
-ws.onclose = () => {
-  term.write('\r\n\x1b[31m[连接已断开]\x1b[0m');
-};
+  ws.onclose = () => {
+    if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+    document.getElementById('reconnect-overlay').style.display = 'flex';
+  };
+}
+
+function doReconnect() {
+  term.clear();
+  connect();
+}
+
+function doClose() {
+  document.getElementById('reconnect-overlay').style.display = 'none';
+  try { parent.postMessage({type: 'close_terminal'}, '*'); } catch(_){}
+}
+
+function doDismiss() {
+  document.getElementById('reconnect-overlay').style.display = 'none';
+}
 
 term.onData((data) => {
-  if (ws.readyState === 1) ws.send(JSON.stringify({type: 'input', data: data}));
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({type: 'input', data: data}));
 });
 
 term.onResize(({cols, rows}) => {
-  if (ws.readyState === 1) ws.send(JSON.stringify({type: 'resize', cols: cols, rows: rows}));
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({type: 'resize', cols: cols, rows: rows}));
 });
 
 window.addEventListener('message', (e) => {
-  if (e.data?.type === 'input' && ws.readyState === 1) {
+  if (e.data?.type === 'input' && ws && ws.readyState === 1) {
     ws.send(JSON.stringify({type: 'input', data: e.data.data}));
   }
 });
@@ -85,6 +141,9 @@ window.addEventListener('message', (e) => {
 const resizeObserver = new ResizeObserver(() => fitAddon.fit());
 resizeObserver.observe(document.getElementById('terminal'));
 window.addEventListener('resize', () => fitAddon.fit());
+
+// 首次连接
+connect();
 </script>
 </body>
 </html>

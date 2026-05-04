@@ -952,6 +952,16 @@
         }
         return;
       }
+      // 终端 iframe 请求关闭
+      if (e.data?.type === 'close_terminal') {
+        for (let i = 0; i < _termTabs.length; i++) {
+          if (_termTabs[i].iframe && _termTabs[i].iframe.contentWindow === e.source) {
+            _termCloseTab(i);
+            break;
+          }
+        }
+        return;
+      }
       // 解析 cwd
       if (e.data?.type !== 'output' || _termIdx < 0) return;
       const tab = _termTabs[_termIdx];

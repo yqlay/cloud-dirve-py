@@ -25,6 +25,7 @@ _DEFAULTS = {
     },
     "terminal": {
         "enabled": True,
+        "timeout_minutes": 40,
     },
     "upload": {
         "max_file_size_mb": 5120,

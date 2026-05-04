@@ -1328,7 +1328,6 @@ def _console_input():
 
             # ── 退出（双步确认） ──
             if line.lower() == "/quit":
-                import time as _time
                 if _pending_confirm.get("/quit", 0) > _time.time():
                     _pending_confirm.pop("/quit", None)
                     print("正在关闭服务...")
@@ -1643,7 +1642,8 @@ def terminal_ws(ws):
                 except (_json.JSONDecodeError, KeyError):
                     pass
             # 闲置超时
-            if _time.time() - last_active > 40 * 60:
+            timeout_sec = get("terminal", "timeout_minutes", 40) * 60
+            if _time.time() - last_active > timeout_sec:
                 try:
                     ws.send("\r\n\x1b[33m[闲置 40 分钟，连接已断开]\x1b[0m")
                 except Exception:

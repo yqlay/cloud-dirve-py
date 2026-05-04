@@ -127,6 +127,7 @@ python app.py
 | `self_domain.domain` | 自定义域名，如 `drive.example.com` |
 | `expose_to_local_area_network.enabled` | 是否启动 Cloudflare 快速隧道 |
 | `terminal.enabled` | 是否启用终端服务 |
+| `terminal.timeout_minutes` | 终端闲置断开时间（分钟），默认 40 |
 | `upload.max_file_size_mb` | 单文件上传上限（MB） |
 | `upload.max_folder_size_mb` | 文件夹上传总大小上限（MB） |
 | `auth.users` | 用户列表 |
