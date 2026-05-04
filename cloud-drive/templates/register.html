@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>注册 - Cloud Drive</title>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --border: #2a2e3e;
+    --text: #e4e4e7; --text-dim: #8b8fa3;
+    --accent: #6366f1; --accent-hover: #818cf8;
+    --danger: #ef4444; --success: #22c55e; --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 2.5rem 2rem;
+    width: 100%; max-width: 400px;
+  }
+  .card h1 {
+    font-size: 1.5rem; font-weight: 700; text-align: center;
+    margin-bottom: 0.25rem;
+    background: linear-gradient(135deg, var(--accent), #a78bfa);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .card .subtitle {
+    text-align: center; color: var(--text-dim);
+    font-size: 0.85rem; margin-bottom: 1.75rem;
+  }
+  .form-group { margin-bottom: 1rem; }
+  .form-group label {
+    display: block; font-size: 0.8rem; color: var(--text-dim);
+    margin-bottom: 0.4rem; font-weight: 500;
+  }
+  .form-group input,
+  .form-group textarea {
+    width: 100%; padding: 0.6rem 0.8rem; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-size: 0.9rem; outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-group input:focus,
+  .form-group textarea:focus { border-color: var(--accent); }
+  .form-group textarea { resize: vertical; min-height: 60px; font-family: inherit; }
+  .msg { font-size: 0.82rem; margin-bottom: 1rem; text-align: center; padding: 0.5rem; border-radius: 6px; }
+  .msg.error { color: #fca5a5; background: rgba(239,68,68,0.1); }
+  .msg.success { color: #86efac; background: rgba(34,197,94,0.1); }
+  .btn {
+    width: 100%; padding: 0.7rem; background: var(--accent); color: #fff;
+    border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .links { text-align: center; margin-top: 1.25rem; font-size: 0.85rem; color: var(--text-dim); }
+  .links a { color: var(--accent); text-decoration: none; }
+  .links a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Cloud Drive</h1>
+  <p class="subtitle">注册新账号</p>
+
+  {% if error %}<div class="msg error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="msg success">{{ success }}</div>{% endif %}
+
+  {% if not disabled %}
+  <form method="post">
+    {% if need_invite_code %}
+    <div class="form-group">
+      <label>邀请码</label>
+      <input type="text" name="invite_code" required placeholder="请输入邀请码">
+    </div>
+    {% endif %}
+    <div class="form-group">
+      <label>用户名</label>
+      <input type="text" name="username" required minlength="3" maxlength="20"
+             pattern="[a-zA-Z0-9_]+" placeholder="3-20位，字母数字下划线" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>密码</label>
+      <input type="password" name="password" required minlength="6" placeholder="至少 6 位" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label>确认密码</label>
+      <input type="password" name="confirm" required minlength="6" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label>附言 <span style="color:var(--text-muted);">（可选，{{ max_msg_len }} 字节以内）</span></label>
+      <textarea name="message" maxlength="{{ max_msg_len }}" placeholder="向管理员说明你是谁，为什么需要访问..."></textarea>
+    </div>
+    <button type="submit" class="btn">提交注册</button>
+  </form>
+  {% endif %}
+
+  <div class="links">
+    <a href="/login">返回登录</a>
+  </div>
+</div>
+</body>
+</html>

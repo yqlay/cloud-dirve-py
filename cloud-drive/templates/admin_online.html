@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}在线用户 - Cloud Drive{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+  <div class="breadcrumb">
+    <a href="/">根目录</a>
+    <span class="sep">/</span>
+    <span class="current">在线用户</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if msg %}
+<div class="toast">{{ msg }}</div>
+{% endif %}
+
+<div style="margin-bottom:1.5rem;">
+  <h2 style="font-size:1.2rem; font-weight:600; margin-bottom:0.5rem;">在线用户</h2>
+  <p style="color:var(--text-dim); font-size:0.85rem;">实时显示当前在线的用户，超过 40 分钟无活动自动下线。</p>
+</div>
+
+{% if online_users %}
+<table class="file-table">
+  <thead>
+    <tr>
+      <th>用户名</th>
+      <th>角色</th>
+      <th class="hide-mobile">IP 地址</th>
+      <th class="hide-mobile">登录时间</th>
+      <th>最后活跃</th>
+      <th style="text-align:right">操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in online_users %}
+    <tr>
+      <td>
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <span style="width:8px; height:8px; border-radius:50%; background:var(--success); display:inline-block;"></span>
+          <span style="font-weight:500;">{{ u.username }}</span>
+        </div>
+      </td>
+      <td>
+        {% if u.role == 'root' %}
+          <span style="color:var(--accent); font-size:0.82rem; font-weight:500;">管理员</span>
+        {% else %}
+          <span style="color:var(--text-dim); font-size:0.82rem;">普通用户</span>
+        {% endif %}
+      </td>
+      <td class="file-meta hide-mobile">{{ u.ip }}</td>
+      <td class="file-meta hide-mobile">{{ u.login_at }}</td>
+      <td class="file-meta">{{ u.last_active }}</td>
+      <td>
+        <div style="display:flex; justify-content:flex-end;">
+          {% if u.username != username %}
+          <form action="/admin/kick/{{ u.username }}" method="post"
+                onsubmit="return confirm('确定强制下线「{{ u.username }}」？')">
+            <button type="submit" class="btn btn-danger btn-sm">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 0 1 0 12.73"/><path d="M15.54 9.46a5 5 0 0 1 0 5.09"/><circle cx="12" cy="12" r="1"/></svg>
+              强制下线
+            </button>
+          </form>
+          {% else %}
+          <span style="color:var(--text-muted); font-size:0.8rem;">（当前用户）</span>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+  <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+  </svg>
+  <p>当前无在线用户</p>
+</div>
+{% endif %}
+{% endblock %}

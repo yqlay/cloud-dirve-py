@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}设置 - Cloud Drive{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+  <div class="breadcrumb">
+    <a href="/">根目录</a>
+    <span class="sep">/</span>
+    <span class="current">设置</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 440px;">
+  <h2 style="font-size:1.2rem; font-weight:600; margin-bottom:1.5rem;">修改密码</h2>
+  <p style="color:var(--c-muted); margin-bottom:1.5rem; font-size:0.9rem;">
+    当前用户：<strong>{{ username }}</strong>
+  </p>
+
+  {% if msg %}
+  <div class="toast error">{{ msg }}</div>
+  {% endif %}
+
+  <form method="post">
+    <div class="form-group">
+      <label>当前密码</label>
+      <input type="password" name="old_password" class="form-input" required>
+    </div>
+    <div class="form-group">
+      <label>新密码</label>
+      <input type="password" name="new_password" class="form-input" required minlength="6"
+             placeholder="至少 6 位">
+    </div>
+    <div class="form-group">
+      <label>确认新密码</label>
+      <input type="password" name="confirm_password" class="form-input" required minlength="6">
+    </div>
+    <div style="display:flex; gap:0.75rem; margin-top:1.5rem;">
+      <a href="/" class="btn btn-ghost" style="flex:1; justify-content:center;">返回</a>
+      <button type="submit" class="btn btn-primary" style="flex:1;">保存</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

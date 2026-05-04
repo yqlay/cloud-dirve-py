@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}操作日志 - Cloud Drive{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+  <div class="breadcrumb">
+    <a href="/">根目录</a>
+    <span class="sep">/</span>
+    <span class="current">操作日志</span>
+  </div>
+  <div class="topbar-actions">
+    <form action="/logs/clear" method="post" onsubmit="return confirm('确定清空所有日志？')">
+      <button type="submit" class="btn btn-danger">清空日志</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if logs %}
+<div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+            padding:1rem; font-family:monospace; font-size:0.82rem; line-height:1.8;
+            max-height:calc(100vh - 200px); overflow-y:auto; color:var(--text-dim);">
+  {% for line in logs %}
+  <div style="border-bottom:1px solid var(--border); padding:0.3rem 0;">{{ line }}</div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+  </svg>
+  <p>暂无操作日志</p>
+</div>
+{% endif %}
+{% endblock %}

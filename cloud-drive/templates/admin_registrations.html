@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}审批管理 - Cloud Drive{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+  <div class="breadcrumb">
+    <a href="/">根目录</a>
+    <span class="sep">/</span>
+    <span class="current">审批管理</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 720px;">
+
+  {# ── 待审批注册 ───────────────────────────────────────────────────── #}
+  <h2 style="font-size:1.2rem; font-weight:600; margin-bottom:1.5rem;">
+    待审批注册
+    {% if pending %}
+    <span style="font-size:0.8rem; color:var(--text-muted); font-weight:400; margin-left:0.5rem;">({{ pending|length }} 人)</span>
+    {% endif %}
+  </h2>
+
+  {% if not pending %}
+  <div style="text-align:center; padding:2rem; color:var(--text-muted); margin-bottom:2rem;">
+    <p style="font-size:0.9rem;">暂无待审批注册</p>
+  </div>
+  {% else %}
+  <div style="display:flex; flex-direction:column; gap:0.75rem; margin-bottom:2.5rem;">
+    {% for user in pending %}
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem 1.25rem; display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:600; font-size:1rem;">{{ user.username }}</div>
+        {% if user.message %}
+        <div style="font-size:0.82rem; color:var(--text); margin-top:0.35rem; padding:0.4rem 0.6rem; background:var(--bg); border-radius:6px; word-break:break-all;">
+          {{ user.message }}
+        </div>
+        {% endif %}
+        <div style="font-size:0.8rem; color:var(--text-dim); margin-top:0.25rem;">
+          申请时间：{{ user.requested_at }}
+        </div>
+      </div>
+      <div style="display:flex; gap:0.5rem; flex-shrink:0;">
+        <form method="post" action="/admin/registrations/approve/{{ user.username }}">
+          <button type="submit" class="btn btn-primary btn-sm">批准</button>
+        </form>
+        <form method="post" action="/admin/registrations/reject/{{ user.username }}">
+          <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--danger);">拒绝</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ── 待审批权限申请 ───────────────────────────────────────────────── #}
+  <h2 style="font-size:1.2rem; font-weight:600; margin-bottom:1.5rem;">
+    待审批权限
+    {% if pending_permissions %}
+    <span style="font-size:0.8rem; color:var(--text-muted); font-weight:400; margin-left:0.5rem;">({{ pending_permissions|length }} 条)</span>
+    {% endif %}
+  </h2>
+
+  {% if not pending_permissions %}
+  <div style="text-align:center; padding:2rem; color:var(--text-muted);">
+    <p style="font-size:0.9rem;">暂无待审批权限申请</p>
+  </div>
+  {% else %}
+  <div style="display:flex; flex-direction:column; gap:0.75rem;">
+    {% for p in pending_permissions %}
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem 1.25rem; display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+      <div>
+        <div style="font-weight:600; font-size:1rem;">{{ p.username }}</div>
+        <div style="font-size:0.8rem; color:var(--text-dim); margin-top:0.25rem;">
+          申请权限：
+          {% if p.permission == 'upload' %}
+            <span style="color:var(--accent); font-weight:500;">上传</span>
+          {% elif p.permission == 'download' %}
+            <span style="color:var(--accent); font-weight:500;">下载</span>
+          {% elif p.permission == 'admin' %}
+            <span style="color:var(--accent); font-weight:500;">管理</span>
+          {% elif p.permission == 'console' %}
+            <span style="color:var(--accent); font-weight:500;">控制台</span>
+          {% elif p.permission == 'terminal' %}
+            <span style="color:var(--accent); font-weight:500;">终端</span>
+          {% else %}
+            <span style="color:var(--accent); font-weight:500;">{{ p.permission }}</span>
+          {% endif %}
+          &nbsp;&middot;&nbsp;申请时间：{{ p.requested_at }}
+        </div>
+      </div>
+      <div style="display:flex; gap:0.5rem; flex-shrink:0;">
+        <form method="post" action="/admin/permissions/approve/{{ p.username }}/{{ p.permission }}">
+          <button type="submit" class="btn btn-primary btn-sm">批准</button>
+        </form>
+        <form method="post" action="/admin/permissions/reject/{{ p.username }}/{{ p.permission }}">
+          <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--danger);">拒绝</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

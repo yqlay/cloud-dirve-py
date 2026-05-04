@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cloud Drive Terminal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<style>
+  html, body { margin:0; padding:0; height:100%; background:#0c0e14; overflow:hidden; }
+  #terminal { height:100%; }
+</style>
+</head>
+<body>
+<div id="terminal"></div>
+<script>
+const term = new Terminal({
+  theme: {
+    background: '#0c0e14',
+    foreground: '#a8b0c0',
+    cursor: '#7ec8e3',
+    selectionBackground: '#264f78',
+  },
+  fontFamily: "'Cascadia Code','Fira Code','JetBrains Mono',monospace",
+  fontSize: 14,
+  cursorBlink: true,
+});
+const fitAddon = new FitAddon.FitAddon();
+term.loadAddon(fitAddon);
+term.open(document.getElementById('terminal'));
+setTimeout(() => fitAddon.fit(), 100);
+
+const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const hashParams = new URLSearchParams(location.hash.substring(1));
+const sessionId = hashParams.get('session') || '';
+const wsUrl = sessionId
+  ? `${proto}//${location.host}/terminal-ws?session=${sessionId}`
+  : `${proto}//${location.host}/terminal-ws`;
+const ws = new WebSocket(wsUrl);
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({type: 'resize', cols: term.cols, rows: term.rows}));
+};
+
+ws.onmessage = (e) => {
+  const data = e.data;
+  if (data.startsWith('{')) {
+    try {
+      const msg = JSON.parse(data);
+      if (msg.type === 'session') {
+        hashParams.set('session', msg.session_id);
+        location.hash = hashParams.toString();
+        try { parent.postMessage({type: 'session', session_id: msg.session_id}, '*'); } catch(_){}
+        return;
+      }
+      if (msg.type === 'replay_done') return;
+    } catch(_) {}
+  }
+  term.write(data);
+  try { parent.postMessage({type: 'output', data: data}, '*'); } catch(_){}
+};
+
+setInterval(() => {
+  if (ws.readyState === 1) ws.send(JSON.stringify({type: 'ping'}));
+}, 30000);
+
+ws.onclose = () => {
+  term.write('\r\n\x1b[31m[连接已断开]\x1b[0m');
+};
+
+term.onData((data) => {
+  if (ws.readyState === 1) ws.send(JSON.stringify({type: 'input', data: data}));
+});
+
+term.onResize(({cols, rows}) => {
+  if (ws.readyState === 1) ws.send(JSON.stringify({type: 'resize', cols: cols, rows: rows}));
+});
+
+window.addEventListener('message', (e) => {
+  if (e.data?.type === 'input' && ws.readyState === 1) {
+    ws.send(JSON.stringify({type: 'input', data: e.data.data}));
+  }
+});
+
+const resizeObserver = new ResizeObserver(() => fitAddon.fit());
+resizeObserver.observe(document.getElementById('terminal'));
+window.addEventListener('resize', () => fitAddon.fit());
+</script>
+</body>
+</html>

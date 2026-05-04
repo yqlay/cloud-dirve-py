@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}远程终端 - Cloud Drive{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+  <div class="breadcrumb">
+    <a href="/">根目录</a>
+    <span class="sep">/</span>
+    <span class="current">远程终端</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- 终端 UI 由 base.html 持久化容器提供，此页面仅在直接访问时显示终端 -->
+<script>
+  (function() {
+    // 直接访问 /admin/terminal 时：隐藏 .content，显示终端容器
+    var content = document.querySelector('.content');
+    var topbar = document.querySelector('.topbar');
+    var persist = document.getElementById('terminal-persist');
+    if (content) content.style.display = 'none';
+    if (topbar) topbar.style.display = 'none';
+    if (persist) persist.style.display = 'flex';
+  })();
+</script>
+{% endblock %}

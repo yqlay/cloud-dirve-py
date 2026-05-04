@@ -1,0 +1,37 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "debug": false,
+    "secret_key": null,
+    "public_url": null,
+    "innet_ip_url": null
+  },
+  "self_domain": {
+    "enabled": false,
+    "domain": ""
+  },
+  "expose_to_local_area_network": {
+    "enabled": false
+  },
+  "terminal": {
+    "enabled": true
+  },
+  "upload": {
+    "max_file_size_mb": 5120,
+    "max_folder_size_mb": 5120
+  },
+  "auth": {
+    "users": [
+      {
+        "username": "admin",
+        "password": "在此设置密码",
+        "role": "super_admin",
+        "permissions": []
+      }
+    ],
+    "invite_code": ["在此设置邀请码"],
+    "registration_enabled": true,
+    "register_message_max_length": 128
+  }
+}

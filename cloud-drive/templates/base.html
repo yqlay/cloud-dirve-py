@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Cloud Drive{% endblock %}</title>
+<style>
+  /* ── 全局变量 ──────────────────────────────────────────────────── */
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface-2: #22263a;
+    --border: #2a2e3e;
+    --text: #e4e4e7;
+    --text-dim: #8b8fa3;
+    --text-muted: #555;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --accent-bg: rgba(99,102,241,0.15);
+    --danger: #ef4444;
+    --danger-hover: #f87171;
+    --danger-bg: rgba(239,68,68,0.12);
+    --success: #22c55e;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --sidebar-w: 240px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+  }
+  a { color: inherit; text-decoration: none; }
+
+  /* ── 通用按钮 ──────────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    padding: 0.4rem 0.85rem; border: none; border-radius: 6px;
+    font-size: 0.82rem; font-weight: 500; cursor: pointer;
+    transition: background 0.15s; text-decoration: none; white-space: nowrap;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-accent { background: var(--accent-bg); color: var(--accent-hover); }
+  .btn-accent:hover { background: rgba(99,102,241,0.25); }
+  .btn-danger { background: var(--danger-bg); color: var(--danger-hover); }
+  .btn-danger:hover { background: rgba(239,68,68,0.22); }
+  .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.78rem; }
+
+  /* ── 主布局 ─────────────────────────────────────────────────────── */
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: var(--sidebar-w); background: var(--surface);
+    border-right: 1px solid var(--border); padding: 1.25rem 0;
+    display: flex; flex-direction: column; flex-shrink: 0;
+    overflow-y: auto;
+  }
+  .sidebar-brand {
+    font-size: 1.1rem; font-weight: 700; padding: 0 1.25rem 1rem;
+    border-bottom: 1px solid var(--border); margin-bottom: 0.75rem;
+    background: linear-gradient(135deg, var(--accent), #a78bfa);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .sidebar-section { padding: 0.5rem 1.25rem; }
+  .sidebar-section h3 {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 500;
+  }
+  .sidebar a {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.45rem 1.25rem; color: var(--text-dim); font-size: 0.88rem;
+    border-radius: 0; transition: background 0.15s, color 0.15s;
+  }
+  .sidebar a:hover, .sidebar a.active { background: var(--surface-2); color: var(--text); }
+  .sidebar a svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .sidebar-spacer { flex: 1; }
+  .sidebar-footer {
+    padding: 0.75rem 1.25rem; border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 0.3rem;
+  }
+  .sidebar-footer .user-name { font-size: 0.82rem; color: var(--text-dim); margin-bottom: 0.25rem; }
+
+  /* ── 主内容 ─────────────────────────────────────────────────────── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar {
+    padding: 1rem 1.75rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface); flex-shrink: 0;
+  }
+  .breadcrumb { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+  .breadcrumb a { color: var(--text-dim); transition: color 0.15s; }
+  .breadcrumb a:hover { color: var(--accent); }
+  .breadcrumb .sep { color: var(--text-muted); }
+  .breadcrumb .current { color: var(--text); font-weight: 600; }
+  .topbar-actions { display: flex; gap: 0.5rem; }
+  .content { flex: 1; overflow-y: auto; padding: 1.25rem 1.75rem; }
+
+  /* ── Toast 提示 ─────────────────────────────────────────────────── */
+  .toast {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 0.65rem 1rem;
+    margin-bottom: 1rem; font-size: 0.88rem; color: var(--success);
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .toast.error { color: var(--danger); }
+
+  /* ── 文件表格 ───────────────────────────────────────────────────── */
+  .file-table { width: 100%; border-collapse: collapse; }
+  .file-table th {
+    text-align: left; padding: 0.5rem 0.75rem; color: var(--text-dim);
+    font-size: 0.75rem; font-weight: 500; text-transform: uppercase;
+    letter-spacing: 0.05em; border-bottom: 1px solid var(--border);
+  }
+  .file-table td {
+    padding: 0.7rem 0.75rem; border-bottom: 1px solid var(--border);
+    font-size: 0.88rem; vertical-align: middle;
+  }
+  .file-table tr:hover td { background: var(--surface-2); }
+  .file-table .checkbox-col { width: 36px; text-align: center; }
+  .file-table input[type="checkbox"] {
+    accent-color: var(--accent); cursor: pointer; width: 15px; height: 15px;
+  }
+  .file-name-cell { display: flex; align-items: center; gap: 0.5rem; }
+  .file-name-cell svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .file-name-cell .name { font-weight: 500; word-break: break-all; }
+  .file-name-cell .name.is-dir { color: var(--accent-hover); cursor: pointer; }
+  .file-name-cell .name.is-dir:hover { text-decoration: underline; }
+  .file-meta { color: var(--text-dim); white-space: nowrap; }
+  .file-actions { display: flex; gap: 0.35rem; justify-content: flex-end; }
+  .empty-state {
+    text-align: center; padding: 4rem 1rem; color: var(--text-dim);
+  }
+  .empty-state svg { width: 56px; height: 56px; stroke: var(--border); margin-bottom: 1rem; }
+  .empty-state p { font-size: 0.95rem; }
+
+  /* ── 文件夹树（侧边栏 + 弹窗） ─────────────────────────────────── */
+  .folder-tree { padding: 0 0.5rem; }
+  .folder-tree ul { list-style: none; padding-left: 1rem; }
+  .folder-tree > ul { padding-left: 0; }
+  .folder-tree li { margin: 0.1rem 0; }
+  .folder-tree .tree-item {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.5rem; border-radius: 4px; cursor: pointer;
+    font-size: 0.84rem; color: var(--text-dim);
+    transition: background 0.12s, color 0.12s;
+  }
+  .folder-tree .tree-item:hover { background: var(--surface-2); color: var(--text); }
+  .folder-tree .tree-item.active { background: var(--accent-bg); color: var(--accent); }
+  .folder-tree .tree-item svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .folder-tree .tree-children { display: none; }
+  .folder-tree .tree-children.open { display: block; }
+  .tree-toggle { cursor: pointer; user-select: none; }
+
+  /* ── 弹窗 ───────────────────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .modal-overlay.show { opacity: 1; pointer-events: auto; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); width: 90%; max-width: 440px;
+    max-height: 70vh; display: flex; flex-direction: column;
+  }
+  .modal-header {
+    padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .modal-header h3 { font-size: 1rem; font-weight: 600; }
+  .modal-close {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 1.2rem; padding: 0.25rem;
+  }
+  .modal-close:hover { color: var(--text); }
+  .modal-body { padding: 1.25rem; overflow-y: auto; flex: 1; }
+  .modal-footer {
+    padding: 0.75rem 1.25rem; border-top: 1px solid var(--border);
+    display: flex; justify-content: flex-end; gap: 0.5rem;
+  }
+
+  /* ── 表单 ───────────────────────────────────────────────────────── */
+  .form-group { margin-bottom: 1rem; }
+  .form-group label {
+    display: block; font-size: 0.8rem; color: var(--text-dim);
+    margin-bottom: 0.35rem; font-weight: 500;
+  }
+  .form-input {
+    width: 100%; padding: 0.6rem 0.8rem; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-size: 0.9rem; outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus { border-color: var(--accent); }
+
+  /* ── 响应式 ─────────────────────────────────────────────────────── */
+  /* ── 消息面板 ─────────────────────────────────────────────────────── */
+  .chat-fab {
+    position: fixed; bottom: 1.5rem; right: 1.5rem; width: 48px; height: 48px;
+    border-radius: 50%; background: var(--accent); color: #fff; border: none;
+    cursor: grab; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: background 0.2s;
+    z-index: 900; user-select: none; -webkit-user-select: none;
+    touch-action: none;
+  }
+  .chat-fab:hover { background: var(--accent-hover); }
+  .chat-fab.dragging { cursor: grabbing; opacity: 0.85; transition: none; }
+  .chat-fab .badge {
+    position: absolute; top: -4px; right: -4px; background: var(--danger);
+    color: #fff; font-size: 0.65rem; font-weight: 700; min-width: 18px;
+    height: 18px; border-radius: 9px; display: flex; align-items: center;
+    justify-content: center; display: none;
+  }
+  .chat-panel {
+    position: fixed; width: 340px; height: 440px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    display: none; flex-direction: column; z-index: 901;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .chat-panel.open { display: flex; }
+  .chat-header {
+    padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 600; font-size: 0.9rem;
+  }
+  .chat-header button {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 1.1rem;
+  }
+  .chat-messages {
+    flex: 1; overflow-y: auto; padding: 0.75rem; display: flex;
+    flex-direction: column; gap: 0.5rem;
+  }
+  .chat-msg {
+    max-width: 85%; padding: 0.45rem 0.7rem; border-radius: 10px;
+    font-size: 0.82rem; line-height: 1.4; word-break: break-word;
+  }
+  .chat-msg.other {
+    align-self: flex-start; background: var(--surface-2); color: var(--text);
+    border-bottom-left-radius: 2px;
+  }
+  .chat-msg.self {
+    align-self: flex-end; background: var(--accent); color: #fff;
+    border-bottom-right-radius: 2px;
+  }
+  .chat-msg.system {
+    align-self: center; background: transparent; color: var(--text-muted);
+    font-size: 0.75rem; font-style: italic;
+  }
+  .chat-msg .meta {
+    font-size: 0.68rem; opacity: 0.6; margin-top: 0.15rem;
+  }
+  .chat-input-area {
+    padding: 0.6rem; border-top: 1px solid var(--border);
+    display: flex; gap: 0.5rem;
+  }
+  .chat-input-area input {
+    flex: 1; padding: 0.5rem 0.7rem; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-size: 0.85rem; outline: none;
+  }
+  .chat-input-area input:focus { border-color: var(--accent); }
+  .chat-input-area button {
+    padding: 0.5rem 0.85rem; background: var(--accent); color: #fff;
+    border: none; border-radius: 6px; font-size: 0.82rem; cursor: pointer;
+  }
+  .chat-input-area button:hover { background: var(--accent-hover); }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .topbar, .content { padding-left: 1rem; padding-right: 1rem; }
+    .file-table .hide-mobile { display: none; }
+    .chat-panel { width: calc(100vw - 2rem); }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">Cloud Drive</div>
+
+    <div class="sidebar-section">
+      <h3>导航</h3>
+    </div>
+    <a href="/" data-page="files" onclick="spaNav('files'); return false;" class="{% if request.endpoint == 'index' and not current_path %}active{% endif %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      全部文件
+    </a>
+    <a href="/logs" data-page="logs" onclick="spaNav('logs'); return false;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      操作日志
+    </a>
+    {% if is_admin_user %}
+    <a href="/admin/registrations" data-page="admin/registrations" onclick="spaNav('admin/registrations'); return false;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+      注册审批
+    </a>
+    <a href="/admin/permissions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      权限管理
+    </a>
+    <a href="/admin/online" data-page="admin/online" onclick="spaNav('admin/online'); return false;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      在线用户
+    </a>
+    {% endif %}
+    {% if can_terminal and terminal_enabled %}
+    <a href="/admin/terminal" data-page="admin/terminal" onclick="spaNav('admin/terminal'); return false;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      远程终端
+    </a>
+    {% endif %}
+
+    <div class="sidebar-section" style="margin-top: 0.75rem;">
+      <h3>文件夹</h3>
+    </div>
+    <div class="folder-tree" id="sidebar-tree">
+      {% macro render_tree(nodes, level=0) %}
+        <ul{% if level == 0 %} class="open"{% endif %}>
+        {% for node in nodes %}
+          <li>
+            <div class="tree-item {% if node.path == current_path %}active{% endif %}"
+                 data-path="{{ node.path }}"
+                 onclick="navigateFolder('{{ node.path }}')">
+              {% if node.children %}
+                <span class="tree-toggle" onclick="event.stopPropagation(); toggleTree(this)">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg>
+                </span>
+              {% else %}
+                <span style="width:12px"></span>
+              {% endif %}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>{{ node.name }}</span>
+            </div>
+            {% if node.children %}
+              <div class="tree-children">{{ render_tree(node.children, level+1) }}</div>
+            {% endif %}
+          </li>
+        {% endfor %}
+        </ul>
+      {% endmacro %}
+      {{ render_tree(tree) }}
+    </div>
+
+    <div class="sidebar-spacer"></div>
+    {% if public_url %}
+    <div style="padding:0.6rem 1.25rem; border-top:1px solid var(--border); font-size:0.78rem;">
+      <div style="color:var(--text-muted); margin-bottom:0.25rem;">公网地址</div>
+      <div style="color:var(--accent); word-break:break-all; cursor:pointer;"
+           onclick="navigator.clipboard.writeText('{{ public_url }}'); this.textContent='已复制 ✓'; setTimeout(()=>this.textContent='{{ public_url }}',1500)">
+        {{ public_url }}
+      </div>
+    </div>
+    {% endif %}
+    {% if innet_ip_url %}
+    <div style="padding:0.6rem 1.25rem; border-top:1px solid var(--border); font-size:0.78rem;">
+      <div style="color:var(--text-muted); margin-bottom:0.25rem;">内网地址</div>
+      <div style="color:var(--accent); word-break:break-all; cursor:pointer;"
+           onclick="navigator.clipboard.writeText('{{ innet_ip_url }}'); this.textContent='已复制 ✓'; setTimeout(()=>this.textContent='{{ innet_ip_url }}',1500)">
+        {{ innet_ip_url }}
+      </div>
+    </div>
+    {% endif %}
+    <div class="sidebar-footer">
+      <span class="user-name">{{ username }}{% if is_super_admin %} (超级管理员){% elif is_admin_user %} (管理员){% endif %}</span>
+      {% if not is_admin_user %}
+      <div style="display:flex; gap:0.3rem; margin-bottom:0.25rem; flex-wrap:wrap;">
+        {% if "upload" not in user_permissions %}
+        <form action="/request-permission" method="post" style="display:inline;">
+          <input type="hidden" name="permission" value="upload">
+          <button type="submit" class="btn btn-ghost btn-sm" style="font-size:0.72rem; padding:0.2rem 0.5rem;">申请上传</button>
+        </form>
+        {% endif %}
+        {% if "terminal" not in user_permissions %}
+        <form action="/request-permission" method="post" style="display:inline;">
+          <input type="hidden" name="permission" value="terminal">
+          <button type="submit" class="btn btn-ghost btn-sm" style="font-size:0.72rem; padding:0.2rem 0.5rem;">申请终端</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
+      <a href="/settings" data-page="settings" onclick="spaNav('settings'); return false;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        设置
+      </a>
+      <a href="/logout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        退出登录
+      </a>
+    </div>
+  </aside>
+
+  <!-- 主内容 -->
+  <div class="main">
+    <!-- __SPA_TOPBAR__ -->{% block topbar %}{% endblock %}<!-- __/SPA_TOPBAR__ -->
+    <div class="content">
+      <!-- __SPA_CONTENT__ -->{% block content %}{% endblock %}<!-- __/SPA_CONTENT__ -->
+    </div>
+    <!-- 持久化终端容器（AJAX 导航时不会被销毁） -->
+    <div id="terminal-persist" style="display:none; flex:1; flex-direction:column; height:calc(100vh - 52px);">
+      <div id="tab-bar" style="display:flex; align-items:center; gap:2px; padding:0.25rem 0.25rem 0; background:var(--surface); border:1px solid var(--border); border-bottom:none; border-radius:var(--radius-sm) var(--radius-sm) 0 0; overflow-x:auto; min-height:36px;">
+        <div id="tabs-container" style="display:flex; gap:2px; flex:1; overflow-x:auto;"></div>
+        <button onclick="restartTerminal()" style="background:none; border:1px solid var(--border); color:var(--text-dim); padding:0.25rem 0.6rem; border-radius:6px; cursor:pointer; font-size:0.78rem; white-space:nowrap; transition:all 0.15s; margin-right:2px;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">&#x21bb; 重启</button>
+        <button id="btn-new-tab" onclick="showCreateDialog()" style="background:none; border:1px dashed var(--border); color:var(--text-dim); padding:0.25rem 0.6rem; border-radius:6px; cursor:pointer; font-size:0.78rem; white-space:nowrap; transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">+ 新建</button>
+      </div>
+      <div id="ttyd-container" style="flex:1; position:relative; display:none; border:1px solid var(--border); border-top:none; border-bottom:none;"></div>
+      <div id="term-output" style="flex:1; overflow-y:auto; padding:1rem; background:#0c0e14; border:1px solid var(--border); border-top:none; border-bottom:none; font-family:'Cascadia Code','Fira Code','JetBrains Mono',monospace; font-size:0.82rem; line-height:1.6; color:#a8b0c0; white-space:pre-wrap; word-break:break-all;">
+        <span style="color:var(--text-dim);">点击「+ 新建」创建终端会话。</span>
+      </div>
+      <div id="console-input-bar" style="display:flex; gap:0.5rem; padding:0.5rem; border:1px solid var(--border); border-top:none; border-radius:0 0 var(--radius-sm) var(--radius-sm); background:var(--surface); align-items:flex-end;">
+        <span id="term-prompt" style="padding:0.5rem 0.6rem; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--accent); font-family:monospace; font-size:0.82rem; display:flex; align-items:center; white-space:nowrap; max-width:260px; overflow:hidden; text-overflow:ellipsis; cursor:default; flex-shrink:0;" title="控制台">$</span>
+        <textarea id="term-input" class="form-input" placeholder="输入控制台命令..." autocomplete="off" spellcheck="false" disabled rows="1" style="font-family:monospace; font-size:0.82rem; flex:1; resize:none; overflow:hidden; min-height:2.2rem; max-height:6rem; line-height:1.4;"></textarea>
+        <button class="btn btn-primary" id="term-run" onclick="execCmd()" disabled style="padding:0.5rem 1rem; font-size:0.82rem; flex-shrink:0;">执行</button>
+        <button class="btn btn-ghost" onclick="clearOutput()" disabled id="term-clear" style="padding:0.5rem 0.8rem; font-size:0.82rem; flex-shrink:0;">清屏</button>
+      </div>
+    </div>
+    <!-- 创建终端弹窗 -->
+    <div id="create-dialog" style="display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:2rem; min-width:300px; text-align:center;">
+        <h3 style="margin-bottom:1.5rem; font-size:1.1rem; color:var(--text);">选择终端类型</h3>
+        <div style="display:flex; gap:1rem; justify-content:center;">
+          <button onclick="createTab('shell')" style="background:var(--bg); border:2px solid var(--border); border-radius:var(--radius-sm); padding:1.2rem 1.5rem; cursor:pointer; color:var(--text); transition:all 0.15s; min-width:120px;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size:1.5rem; margin-bottom:0.5rem;">&#9000;</div>
+            <div style="font-weight:600; font-size:0.9rem;">系统终端</div>
+            <div style="font-size:0.72rem; color:var(--text-dim); margin-top:0.25rem;">真 PTY 终端</div>
+          </button>
+          <button onclick="createTab('console')" style="background:var(--bg); border:2px solid var(--border); border-radius:var(--radius-sm); padding:1.2rem 1.5rem; cursor:pointer; color:var(--text); transition:all 0.15s; min-width:120px;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size:1.5rem; margin-bottom:0.5rem;">&#9881;</div>
+            <div style="font-weight:600; font-size:0.9rem;">控制台</div>
+            <div style="font-size:0.72rem; color:var(--text-dim); margin-top:0.25rem;">Cloud Drive 命令</div>
+          </button>
+        </div>
+        <button onclick="hideCreateDialog()" style="margin-top:1.2rem; background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:0.82rem;">取消</button>
+      </div>
+    </div>
+    <!-- SPA 页面缓存（各页面 DOM 存活于此） -->
+    <div id="page-cache" style="display:none; flex:1; flex-direction:column; overflow:auto;"></div>
+  </div>
+</div>
+
+
+<!-- ── 消息面板 ─────────────────────────────────────────────────── -->
+<button class="chat-fab" id="chat-fab" title="消息">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  <span class="badge" id="chat-badge"></span>
+</button>
+
+<div class="chat-panel" id="chat-panel">
+  <div class="chat-header">
+    <span>消息</span>
+    <button onclick="toggleChat()">&times;</button>
+  </div>
+  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-input-area">
+    <input type="text" id="chat-input" placeholder="输入消息..." maxlength="500"
+           onkeydown="if(event.key==='Enter')sendMsg()">
+    <button onclick="sendMsg()">发送</button>
+  </div>
+</div>
+
+<script>
+  /* ══════════════════════════════════════════════════════════════════
+     SPA 路由 — 所有页面共存，切换只做 show/hide
+     ══════════════════════════════════════════════════════════════════ */
+  const _pageCache = document.getElementById('page-cache');
+  const _topbar = document.querySelector('.topbar');
+  const _content = document.querySelector('.content');
+  const _persist = document.getElementById('terminal-persist');
+  let _currentPage = null;  // 当前显示的页面 slug（含路径参数）
+
+  // 生成缓存 key（files 页面区分路径）
+  function _cacheKey(pageSlug, query) {
+    if (pageSlug === 'files') return 'files' + (query || '');
+    return pageSlug;
+  }
+
+  function _pageToUrl(slug) {
+    const map = {
+      'files': '/', 'logs': '/logs', 'settings': '/settings',
+      'admin/registrations': '/admin/registrations',
+      'admin/online': '/admin/online', 'admin/terminal': '/admin/terminal',
+    };
+    return map[slug] || '/';
+  }
+
+  // 判断是否是初始页面（服务端渲染，内容在 _content 中）
+  let _initialPage = _currentPage;
+
+  async function spaNav(pageSlug, opts) {
+    opts = opts || {};
+    const key = _cacheKey(pageSlug, opts.query);
+    if (_currentPage === key && !opts.force) return;
+
+    // 终端页：隐藏 .content + topbar + page-cache，显示 #terminal-persist
+    if (pageSlug === 'admin/terminal') {
+      _content.style.display = 'none';
+      if (_topbar) _topbar.style.display = 'none';
+      _pageCache.style.display = 'none';
+      _persist.style.display = 'flex';
+    } else {
+      _persist.style.display = 'none';
+
+      // 检查是否是初始页面（服务端渲染的内容在 _content 中）
+      if (key === _initialPage) {
+        _pageCache.style.display = 'none';
+        _content.style.display = '';
+        if (_topbar) _topbar.style.display = '';
+      } else {
+        let cached = _pageCache.querySelector('[data-page="' + key + '"]');
+        if (cached) {
+          // 隐藏初始页面，显示缓存页面
+          _content.style.display = 'none';
+          if (_topbar) _topbar.style.display = 'none';
+          _pageCache.querySelectorAll(':scope > div').forEach(d => d.style.display = 'none');
+          _pageCache.style.display = 'flex';
+          cached.style.display = 'flex';
+          cached.style.flexDirection = 'column';
+          cached.style.flex = '1';
+        } else {
+          await _loadPage(pageSlug, key, opts);
+        }
+      }
+    }
+
+    // 更新 sidebar active
+    document.querySelectorAll('.sidebar a[data-page]').forEach(a => a.classList.remove('active'));
+    const activeLink = document.querySelector('.sidebar a[data-page="' + pageSlug + '"]');
+    if (activeLink) activeLink.classList.add('active');
+
+    _currentPage = key;
+    const url = opts.url || (pageSlug === 'files' && opts.query
+      ? '/folder/' + new URLSearchParams(opts.query).get('path')
+      : _pageToUrl(pageSlug));
+    history.pushState({page: pageSlug, query: opts.query}, '', url);
+  }
+
+  async function _loadPage(pageSlug, key, opts) {
+    const apiUrl = '/api/page/' + pageSlug + (opts.query || '');
+    try {
+      const resp = await fetch(apiUrl, {credentials: 'same-origin'});
+      if (!resp.ok) { window.location.href = opts.url || _pageToUrl(pageSlug); return; }
+      const data = await resp.json();
+
+      if (data.is_terminal) {
+        _content.style.display = 'none';
+        if (_topbar) _topbar.style.display = 'none';
+        _persist.style.display = 'flex';
+        if (data.title) document.title = data.title;
+        return;
+      }
+
+      const wrapper = document.createElement('div');
+      wrapper.setAttribute('data-page', key);
+      wrapper.style.display = 'none';
+
+      const tb = document.createElement('div');
+      tb.className = 'topbar';
+      tb.innerHTML = data.topbar || '';
+      wrapper.appendChild(tb);
+
+      const ct = document.createElement('div');
+      ct.className = 'content';
+      ct.innerHTML = data.content || '';
+      wrapper.appendChild(ct);
+
+      _pageCache.appendChild(wrapper);
+
+      _content.style.display = 'none';
+      if (_topbar) _topbar.style.display = 'none';
+      _pageCache.querySelectorAll(':scope > div').forEach(d => {
+        if (d !== wrapper) d.style.display = 'none';
+      });
+      _pageCache.style.display = 'flex';
+      wrapper.style.display = 'flex';
+      wrapper.style.flexDirection = 'column';
+      wrapper.style.flex = '1';
+
+      if (data.title) document.title = data.title;
+
+      if (data.scripts) {
+        const s = document.createElement('script');
+        s.textContent = data.scripts;
+        document.body.appendChild(s);
+      }
+    } catch (e) {
+      window.location.href = opts.url || _pageToUrl(pageSlug);
+    }
+  }
+
+  // popstate（浏览器前进/后退）
+  window.addEventListener('popstate', function(e) {
+    if (e.state?.page) {
+      spaNav(e.state.page, {query: e.state.query, force: true});
+    } else {
+      window.location.reload();
+    }
+  });
+
+  /* ── 侧边栏文件夹树 ────────────────────────────────────────────── */
+  function toggleTree(el) {
+    const children = el.closest('li').querySelector('.tree-children');
+    if (children) {
+      children.classList.toggle('open');
+      el.style.transform = children.classList.contains('open') ? 'rotate(90deg)' : '';
+    }
+  }
+  function navigateFolder(path) {
+    const query = path ? '?path=' + encodeURIComponent(path) : '';
+    spaNav('files', {query: query, url: path ? '/folder/' + path : '/'});
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     终端系统 — 始终存活，永不销毁
+     ══════════════════════════════════════════════════════════════════ */
+  const STORAGE_KEY = 'cd_terminal_state';
+  const _termTabs = [];
+  let _termIdx = -1;
+
+  const _tabsContainer = document.getElementById('tabs-container');
+  const _ttydContainer = document.getElementById('ttyd-container');
+  const _termOutput = document.getElementById('term-output');
+  const _consoleBar = document.getElementById('console-input-bar');
+  const _termInput = document.getElementById('term-input');
+  const _termPrompt = document.getElementById('term-prompt');
+  const _termRun = document.getElementById('term-run');
+  const _termClear = document.getElementById('term-clear');
+
+  const TTYD_BASE = location.origin + '/terminal-page';
+
+  function _createShellIframe(tab) {
+    // 检查是否已有此 tab 的 iframe
+    const existing = _ttydContainer.querySelector('[data-tab-id="' + tab.id + '"]');
+    if (existing) { tab.iframe = existing; return; }
+    const frame = document.createElement('iframe');
+    // 通过 URL hash 传递 session_id，实现断线重连
+    const hash = tab.sessionId ? '#session=' + tab.sessionId : '';
+    frame.src = TTYD_BASE + hash;
+    frame.setAttribute('data-tab-id', tab.id);
+    frame.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; border:none; background:#0c0e14;';
+    frame.setAttribute('allow', 'clipboard-read; clipboard-write');
+    frame.style.display = 'none';
+    _ttydContainer.appendChild(frame);
+    tab.iframe = frame;
+  }
+
+  function _termSaveState() {
+    const state = {
+      activeIdx: _termIdx,
+      tabs: _termTabs.map(t => ({
+        id: t.id, type: t.type, label: t.label, sessionId: t.sessionId,
+        outputHtml: t.outputHtml, history: t.history, cwd: t.cwd,
+      })),
+    };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  async function _termRestoreState() {
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (e) { return; }
+    if (!saved || !saved.tabs || saved.tabs.length === 0) return;
+
+    for (const s of saved.tabs) {
+      if (s.type === 'shell') {
+        const tab = {
+          id: s.id || ('ttyd-' + Date.now()), sessionId: s.sessionId || null, type: 'shell',
+          label: s.label || '系统终端', cwd: s.cwd || 'D:\\web',
+          outputHtml: '', history: [], histIdx: -1, running: false, iframe: null,
+        };
+        _createShellIframe(tab);
+        _termTabs.push(tab);
+      } else {
+        try {
+          const resp = await fetch('/api/terminal/create', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({type: 'console'}),
+          });
+          const data = await resp.json();
+          if (!resp.ok) continue;
+          _termTabs.push({
+            id: data.session_id, sessionId: data.session_id, type: 'console',
+            label: data.label, cwd: data.cwd,
+            outputHtml: s.outputHtml || '', history: s.history || [], histIdx: -1, running: false, iframe: null,
+          });
+        } catch (e) { continue; }
+      }
+    }
+
+    if (_termTabs.length === 0) return;
+    _termRenderTabs();
+    _termSwitchTab(Math.min(saved.activeIdx || 0, _termTabs.length - 1));
+  }
+
+  async function restartTerminal() {
+    if (!confirm('重启终端服务？所有终端会话将断开。')) return;
+    try {
+      const resp = await fetch('/api/terminal/restart', {method: 'POST'});
+      const data = await resp.json();
+      if (data.ok) {
+        for (let i = _termTabs.length - 1; i >= 0; i--) {
+          if (_termTabs[i].type === 'shell') _termCloseTab(i);
+        }
+        alert('终端服务已重启，请重新创建终端。');
+      } else {
+        alert('重启失败: ' + (data.error || '未知错误'));
+      }
+    } catch (e) {
+      alert('重启失败: ' + e.message);
+    }
+  }
+
+  function showCreateDialog() {
+    document.getElementById('create-dialog').style.display = 'flex';
+  }
+  function hideCreateDialog() {
+    document.getElementById('create-dialog').style.display = 'none';
+  }
+
+  async function createTab(type) {
+    hideCreateDialog();
+    if (type === 'shell') {
+      const tab = {
+        id: 'ttyd-' + Date.now(), sessionId: null, type: 'shell',
+        label: '系统终端 ' + (_termTabs.filter(t => t.type === 'shell').length + 1),
+        cwd: 'D:\\web', outputHtml: '', history: [], histIdx: -1, running: false, iframe: null,
+      };
+      _createShellIframe(tab);
+      _termTabs.push(tab);
+      _termRenderTabs(); _termSwitchTab(_termTabs.length - 1); _termSaveState();
+      return;
+    }
+    try {
+      const resp = await fetch('/api/terminal/create', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type}),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { alert(data.error || '创建失败'); return; }
+      const tab = {
+        id: data.session_id, sessionId: data.session_id, type: 'console',
+        label: data.label, cwd: data.cwd, outputHtml: '', history: [], histIdx: -1, running: false, iframe: null,
+      };
+      _termTabs.push(tab);
+      _termRenderTabs(); _termSwitchTab(_termTabs.length - 1);
+      _termAppendToTab(tab, 'Cloud Drive Terminal [控制台]', 'var(--accent)');
+      _termAppendToTab(tab, '命令: /help /online /kick /approve /reject /grant /revoke /read config /read server', 'var(--text-dim)');
+      _termAppendToTab(tab, '─────────────────────────────────────', 'var(--text-dim)');
+      _termSaveState();
+    } catch (e) {
+      alert('创建失败: ' + e.message);
+    }
+  }
+
+  function _termRenderTabs() {
+    _tabsContainer.innerHTML = '';
+    _termTabs.forEach((tab, i) => {
+      const el = document.createElement('div');
+      el.style.cssText = 'display:flex; align-items:center; gap:0.4rem; padding:0.3rem 0.6rem; border-radius:6px 6px 0 0; cursor:pointer; font-size:0.78rem; white-space:nowrap; transition:all 0.15s; border:1px solid var(--border); border-bottom:none; '
+        + (i === _termIdx ? 'background:#0c0e14; color:var(--text);' : 'background:var(--surface); color:var(--text-dim);');
+      el.onclick = () => _termSwitchTab(i);
+      const icon = tab.type === 'shell' ? '&#9000;' : '&#9881;';
+      el.innerHTML = '<span style="font-size:0.7rem;">' + icon + '</span> ' + tab.label;
+      const close = document.createElement('span');
+      close.innerHTML = '&times;';
+      close.style.cssText = 'margin-left:0.3rem; opacity:0.5; cursor:pointer; font-size:0.9rem;';
+      close.onmouseover = () => close.style.opacity = '1';
+      close.onmouseout = () => close.style.opacity = '0.5';
+      close.onclick = (e) => { e.stopPropagation(); _termCloseTab(i); };
+      el.appendChild(close);
+      _tabsContainer.appendChild(el);
+    });
+  }
+
+  function _termSwitchTab(i) {
+    if (_termIdx >= 0 && _termIdx < _termTabs.length) {
+      const cur = _termTabs[_termIdx];
+      if (cur.type === 'console') cur.outputHtml = _termOutput.innerHTML;
+      if (cur.iframe) cur.iframe.style.display = 'none';
+    }
+    _termIdx = i;
+    const tab = _termTabs[i];
+    if (tab.type === 'shell') {
+      _ttydContainer.style.display = 'block';
+      _termOutput.style.display = 'none';
+      _consoleBar.style.display = 'flex';
+      if (tab.iframe) tab.iframe.style.display = 'block';
+      _termPrompt.textContent = tab.cwd + '>';
+      _termPrompt.title = tab.cwd;
+      _termInput.disabled = false; _termRun.disabled = false; _termClear.disabled = true;
+      _termInput.placeholder = 'Enter 执行 | Ctrl+Enter 仅发送 | Shift+Enter 换行';
+      _termInput.focus();
+    } else {
+      _ttydContainer.style.display = 'none';
+      _termOutput.style.display = 'block';
+      _consoleBar.style.display = 'flex';
+      _termOutput.innerHTML = tab.outputHtml;
+      _termOutput.scrollTop = _termOutput.scrollHeight;
+      _termPrompt.textContent = '$'; _termPrompt.title = '控制台';
+      _termInput.disabled = false; _termRun.disabled = false; _termClear.disabled = false;
+      _termInput.placeholder = '输入控制台命令 (/help, /online, /kick ...)';
+      _termInput.focus();
+    }
+    _termRenderTabs(); _termSaveState();
+  }
+
+  async function _termCloseTab(i) {
+    const tab = _termTabs[i];
+    if (tab.iframe) { tab.iframe.remove(); tab.iframe = null; }
+    if (tab.type === 'console' && tab.sessionId) {
+      try { await fetch('/api/terminal/close', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({session_id: tab.sessionId}) }); } catch (e) {}
+    }
+    _termTabs.splice(i, 1);
+    if (_termTabs.length === 0) {
+      _termIdx = -1;
+      _ttydContainer.style.display = 'none';
+      _termOutput.style.display = 'block';
+      _termOutput.innerHTML = '<span style="color:var(--text-dim);">点击「+ 新建」创建终端会话。</span>';
+      _consoleBar.style.display = 'flex';
+      _termInput.disabled = true; _termRun.disabled = true; _termClear.disabled = true;
+      _termPrompt.textContent = '$';
+    } else {
+      const newIdx = Math.min(i, _termTabs.length - 1);
+      _termIdx = -1; _termSwitchTab(newIdx); return;
+    }
+    _termRenderTabs(); _termSaveState();
+  }
+
+  function _termAppendToTab(tab, text, color, isSep) {
+    const span = document.createElement('span');
+    span.style.display = 'block';
+    if (isSep) { span.style.borderBottom = '1px solid #2a2d3a'; span.style.margin = '0.3rem 0'; span.style.width = '100%'; }
+    else { if (color) span.style.color = color; span.textContent = text; }
+    tab.outputHtml += span.outerHTML;
+    if (_termTabs[_termIdx] === tab) { _termOutput.appendChild(span); _termOutput.scrollTop = _termOutput.scrollHeight; }
+  }
+
+  function clearOutput() {
+    if (_termIdx < 0) return;
+    _termTabs[_termIdx].outputHtml = '';
+    _termOutput.innerHTML = '';
+    _termSaveState();
+  }
+
+  function _sendToShell(tab, data) {
+    if (!tab.iframe || !tab.iframe.contentWindow) return;
+    tab.iframe.contentWindow.postMessage({type: 'input', data}, TTYD_BASE);
+  }
+
+  function _autoResizeInput() {
+    _termInput.style.height = 'auto';
+    _termInput.style.height = Math.min(_termInput.scrollHeight, 96) + 'px';
+  }
+
+  _termInput.addEventListener('keydown', function(e) {
+    if (_termIdx < 0) return;
+    const tab = _termTabs[_termIdx];
+    if (e.key === 'Enter') {
+      if (e.shiftKey) return;
+      e.preventDefault();
+      if (tab.type === 'shell') {
+        const text = _termInput.value;
+        if (e.ctrlKey) { if (text) _sendToShell(tab, text); }
+        else { _sendToShell(tab, text + '\r'); _termInput.value = ''; _autoResizeInput(); }
+      } else { execCmd(); }
+    } else if (tab.type === 'console') {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (tab.history.length === 0) return;
+        if (tab.histIdx < tab.history.length - 1) tab.histIdx++;
+        _termInput.value = tab.history[tab.history.length - 1 - tab.histIdx];
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (tab.histIdx > 0) { tab.histIdx--; _termInput.value = tab.history[tab.history.length - 1 - tab.histIdx]; }
+        else { tab.histIdx = -1; _termInput.value = ''; }
+      }
+    }
+  });
+
+  _termInput.addEventListener('input', _autoResizeInput);
+
+  async function execCmd() {
+    if (_termIdx < 0) return;
+    const tab = _termTabs[_termIdx];
+    if (tab.type === 'shell') {
+      _sendToShell(tab, _termInput.value + '\r');
+      _termInput.value = ''; _autoResizeInput(); _termInput.focus(); return;
+    }
+    if (tab.type !== 'console') return;
+    const cmd = _termInput.value.trim();
+    if (!cmd || tab.running) return;
+    tab.running = true;
+    _termRun.disabled = true; _termRun.textContent = '执行中...';
+    tab.history.push(cmd); tab.histIdx = -1; _termInput.value = '';
+    _termAppendToTab(tab, '$ ' + cmd, 'var(--success)');
+    try {
+      const resp = await fetch('/api/terminal/exec', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({cmd, session_id: tab.sessionId}),
+      });
+      if (resp.status === 403) { const d = await resp.json(); _termAppendToTab(tab, '[拒绝] ' + (d.error || '命令被拒绝'), 'var(--danger)'); return; }
+      if (resp.status === 404) { const d = await resp.json(); _termAppendToTab(tab, '[错误] ' + (d.error || '会话不存在'), 'var(--danger)'); return; }
+      if (!resp.ok) { const d = await resp.json().catch(() => ({})); _termAppendToTab(tab, '[错误] ' + (d.error || '请求失败'), 'var(--danger)'); return; }
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, {stream: true});
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (line.startsWith('event: done')) continue;
+          if (line.startsWith('data: ')) {
+            const text = line.slice(6);
+            if (text.startsWith('[退出码:')) _termAppendToTab(tab, text, text.includes(' 0]') ? 'var(--success)' : 'var(--danger)');
+            else if (text.startsWith('[错误:') || text.startsWith('[拒绝]') || text.startsWith('[提示]')) _termAppendToTab(tab, text, text.startsWith('[错误') ? 'var(--danger)' : 'var(--accent)');
+            else _termAppendToTab(tab, text);
+          }
+        }
+      }
+    } catch (e) {
+      _termAppendToTab(tab, '[网络错误] ' + e.message, 'var(--danger)');
+    } finally {
+      _termAppendToTab(tab, '', null, true);
+      tab.running = false;
+      _termRun.disabled = false; _termRun.textContent = '执行';
+      _termInput.focus(); _termSaveState();
+    }
+  }
+
+  // 监听 iframe 输出，解析 cwd + 捕获 session_id（只绑定一次）
+  // 匹配 cmd.exe (D:\web>) 和 PowerShell (PS D:\web>) 的 prompt
+  const _cwdRe = /(?:PS\s+)?([A-Za-z]:\\(?:[^\\\s>]+\\)*[^\\\s>]*)>/;
+  if (!window.__termMsgBound) {
+    window.__termMsgBound = true;
+    window.addEventListener('message', function(e) {
+      // 捕获 session_id（终端服务端返回的会话 ID）
+      if (e.data?.type === 'session' && e.data.session_id) {
+        const sid = e.data.session_id;
+        // 找到发送此消息的 iframe 对应的 tab
+        for (const tab of _termTabs) {
+          if (tab.iframe && tab.iframe.contentWindow === e.source) {
+            if (tab.sessionId !== sid) {
+              tab.sessionId = sid;
+              _termSaveState();
+            }
+            break;
+          }
+        }
+        return;
+      }
+      // 解析 cwd
+      if (e.data?.type !== 'output' || _termIdx < 0) return;
+      const tab = _termTabs[_termIdx];
+      if (!tab || tab.type !== 'shell') return;
+      const text = e.data.data || '';
+      const m = text.match(_cwdRe);
+      if (m && m[1] !== tab.cwd) {
+        tab.cwd = m[1];
+        _termPrompt.textContent = tab.cwd + '>';
+        _termPrompt.title = tab.cwd;
+        _termSaveState();
+      }
+    });
+  }
+
+  // 恢复终端状态
+  _termRestoreState();
+
+  // SPA 初始化：根据当前 URL 设置 _currentPage
+  (function() {
+    const path = location.pathname;
+    const query = location.search;
+    if (path === '/admin/terminal') {
+      _currentPage = _cacheKey('admin/terminal', '');
+    } else if (path.startsWith('/folder/') || path === '/') {
+      _currentPage = _cacheKey('files', query);
+    } else if (path === '/logs') {
+      _currentPage = 'logs';
+    } else if (path === '/settings') {
+      _currentPage = 'settings';
+    } else if (path === '/admin/registrations') {
+      _currentPage = 'admin/registrations';
+    } else if (path === '/admin/online') {
+      _currentPage = 'admin/online';
+    }
+  })();
+
+  /* ── 消息系统 ───────────────────────────────────────────────────── */
+  let chatOpen = false;
+  let lastMsgId = 0;
+  let unreadCount = 0;
+  const currentUser = '{{ username }}';
+
+  function toggleChat() {
+    chatOpen = !chatOpen;
+    const panel = document.getElementById('chat-panel');
+    const badge = document.getElementById('chat-badge');
+    if (chatOpen) {
+      positionPanel();
+      panel.classList.add('open');
+      badge.style.display = 'none';
+      unreadCount = 0;
+      document.getElementById('chat-input').focus();
+      scrollChatBottom();
+    } else {
+      panel.classList.remove('open');
+    }
+  }
+
+  function positionPanel() {
+    const fab = document.querySelector('.chat-fab');
+    const panel = document.getElementById('chat-panel');
+    const rect = fab.getBoundingClientRect();
+    const pw = 340, ph = 440, gap = 12;
+    let left = rect.left + rect.width / 2 - pw;
+    let top = rect.top - ph - gap;
+    if (left < 8) left = 8;
+    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    if (top < 8) top = rect.bottom + gap;
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+  }
+
+  // ── 拖拽 ──
+  (function() {
+    const fab = document.querySelector('.chat-fab');
+    let dragging = false, moved = false;
+    let startX, startY, startLeft, startTop;
+
+    function onStart(e) {
+      e.preventDefault();
+      const touch = e.touches ? e.touches[0] : e;
+      dragging = true; moved = false;
+      fab.classList.add('dragging');
+      const rect = fab.getBoundingClientRect();
+      startX = touch.clientX;
+      startY = touch.clientY;
+      startLeft = rect.left;
+      startTop = rect.top;
+      fab.style.left = rect.left + 'px';
+      fab.style.top = rect.top + 'px';
+      fab.style.bottom = 'auto';
+      fab.style.right = 'auto';
+    }
+
+    function onMove(e) {
+      if (!dragging) return;
+      e.preventDefault();
+      const touch = e.touches ? e.touches[0] : e;
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+      let newLeft = startLeft + dx;
+      let newTop = startTop + dy;
+      newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - 48));
+      newTop = Math.max(0, Math.min(newTop, window.innerHeight - 48));
+      fab.style.left = newLeft + 'px';
+      fab.style.top = newTop + 'px';
+      if (chatOpen) positionPanel();
+    }
+
+    function onEnd() {
+      if (!dragging) return;
+      dragging = false;
+      fab.classList.remove('dragging');
+      // 保存位置
+      localStorage.setItem('chatFabPos', JSON.stringify({left: fab.style.left, top: fab.style.top}));
+      if (!moved) toggleChat();
+    }
+
+    fab.addEventListener('mousedown', onStart);
+    fab.addEventListener('touchstart', onStart, {passive: false});
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, {passive: false});
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchend', onEnd);
+
+    // 恢复位置
+    try {
+      const saved = JSON.parse(localStorage.getItem('chatFabPos'));
+      if (saved && saved.left && saved.top) {
+        fab.style.left = saved.left;
+        fab.style.top = saved.top;
+        fab.style.bottom = 'auto';
+        fab.style.right = 'auto';
+      }
+    } catch (e) {}
+  })();
+
+  function scrollChatBottom() {
+    const el = document.getElementById('chat-messages');
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function renderMsg(msg) {
+    const div = document.createElement('div');
+    if (msg.is_system) {
+      div.className = 'chat-msg system';
+      div.textContent = msg.content;
+    } else if (msg.user === currentUser) {
+      div.className = 'chat-msg self';
+      div.innerHTML = '<div>' + escapeHtml(msg.content) + '</div>' +
+                      '<div class="meta">' + msg.time.substring(11, 16) + '</div>';
+    } else {
+      div.className = 'chat-msg other';
+      div.innerHTML = '<div style="font-size:0.72rem;color:var(--accent);margin-bottom:0.1rem;">' +
+                      escapeHtml(msg.user) + '</div>' +
+                      '<div>' + escapeHtml(msg.content) + '</div>' +
+                      '<div class="meta">' + msg.time.substring(11, 16) + '</div>';
+    }
+    return div;
+  }
+
+  function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
+  }
+
+  async function pollMessages() {
+    try {
+      const resp = await fetch('/api/messages?last_id=' + lastMsgId);
+      if (!resp.ok) return;
+      const msgs = await resp.json();
+      if (msgs.length === 0) return;
+
+      const container = document.getElementById('chat-messages');
+      msgs.forEach(msg => {
+        container.appendChild(renderMsg(msg));
+        lastMsgId = Math.max(lastMsgId, msg.id);
+      });
+      scrollChatBottom();
+
+      // 未读计数
+      if (!chatOpen) {
+        unreadCount += msgs.filter(m => !m.is_system && m.user !== currentUser).length;
+        const badge = document.getElementById('chat-badge');
+        if (unreadCount > 0) {
+          badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+          badge.style.display = 'flex';
+        }
+      }
+    } catch (e) { /* 忽略网络错误 */ }
+  }
+
+  async function sendMsg() {
+    const input = document.getElementById('chat-input');
+    const content = input.value.trim();
+    if (!content) return;
+    input.value = '';
+
+    const form = new FormData();
+    form.append('content', content);
+    try {
+      await fetch('/api/messages/send', { method: 'POST', body: form });
+      pollMessages();
+    } catch (e) { /* 忽略 */ }
+  }
+
+  // 初始加载 + 每 3 秒轮询
+  pollMessages();
+  setInterval(pollMessages, 3000);
+</script>
+<!-- __SPA_SCRIPTS__ -->{% block scripts %}{% endblock %}<!-- __/SPA_SCRIPTS__ -->
+</body>
+</html>
