@@ -44,8 +44,10 @@
         </div>
       </td>
       <td>
-        {% if u.role == 'root' %}
-          <span style="color:var(--accent); font-size:0.82rem; font-weight:500;">管理员</span>
+        {% if u.role == 'super_admin' %}
+          <span style="color:var(--accent); font-size:0.82rem; font-weight:500;">超级管理员</span>
+        {% elif u.role == 'admin' %}
+          <span style="color:var(--success); font-size:0.82rem; font-weight:500;">管理员</span>
         {% else %}
           <span style="color:var(--text-dim); font-size:0.82rem;">普通用户</span>
         {% endif %}
