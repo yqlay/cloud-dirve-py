@@ -814,10 +814,9 @@ def api_page(page_name: str):
     elif page_name == "admin/online":
         ctx["online_users"] = get_online_users()
     elif page_name == "admin/permissions":
-        from auth import get_all_usernames, get_user_role, get_user_permissions, is_super_admin as _isa
         ctx["is_admin_user"] = True
         ctx["user_permissions"] = get_user_permissions(session.get("username", ""))
-        ctx["is_super_admin"] = _isa(session.get("username", ""))
+        ctx["is_super_admin"] = is_super_admin(session.get("username", ""))
         _all_perms = ["download", "upload", "admin", "console", "terminal"]
         _auto_map = {
             "super_admin": {"download", "upload", "admin", "console", "terminal"},
@@ -1020,7 +1019,6 @@ def _resolve_cd_path(cwd: str, target: str) -> str | None:
 @admin_required
 def admin_permissions():
     """权限管理页面。"""
-    from auth import get_all_usernames, get_user_role, get_user_permissions, is_super_admin
     all_perms = ["download", "upload", "admin", "console", "terminal"]
     auto_perms_map = {
         "super_admin": {"download", "upload", "admin", "console", "terminal"},
