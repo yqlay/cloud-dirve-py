@@ -30,13 +30,17 @@
       上传
     </button>
     {% endif %}
+    <button class="btn btn-accent" id="download-btn" disabled onclick="batchDownload()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      下载 <span id="download-count" class="btn-count"></span>
+    </button>
     <button class="btn btn-primary" id="move-btn" disabled onclick="openModal('move-modal')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
-      移动 <span id="move-count"></span>
+      移动 <span id="move-count" class="btn-count"></span>
     </button>
     <button class="btn btn-danger" id="delete-btn" disabled onclick="batchDelete()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-      删除 <span id="delete-count"></span>
+      删除 <span id="delete-count" class="btn-count"></span>
     </button>
   </div>
 </div>
@@ -83,6 +87,14 @@
 {% endif %}
 
 {% if files %}
+<div class="sticky-header">
+<div class="selection-bar">
+  <span class="hint-default">Shift+点击 连选 · 拖拽 框选</span>
+  <span class="hint-selected" style="display:none;">
+    已选 <strong id="selected-count">0</strong> 项
+    <button class="btn-cancel-select" onclick="clearSelection()">取消选择</button>
+  </span>
+</div>
 <table class="file-table">
   <thead>
     <tr>
@@ -97,9 +109,7 @@
     {% for f in files %}
     <tr>
       <td class="checkbox-col">
-        {% if not f.is_dir %}
-        <input type="checkbox" class="file-check" value="{{ f.id }}" onchange="updateMoveBtn()">
-        {% endif %}
+        <input type="checkbox" class="file-check" value="{{ f.id }}" data-idx="{{ loop.index0 }}" onchange="onCheckChange(event, this)">
       </td>
       <td>
         <div class="file-name-cell">
@@ -136,6 +146,7 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
 <div class="empty-state">
   <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -265,9 +276,30 @@
   });
 
   /* ── 文件选择与操作按钮 ─────────────────────────────────────────── */
+  let _lastCheckIdx = -1;
+
   function updateMoveBtn() {
+    const boxes = document.querySelectorAll('.file-check');
     const checked = document.querySelectorAll('.file-check:checked');
     const n = checked.length;
+
+    // 行高亮
+    boxes.forEach(cb => {
+      const tr = cb.closest('tr');
+      if (tr) tr.classList.toggle('selected', cb.checked);
+    });
+
+    // 全选 checkbox indeterminate 状态
+    const selectAll = document.getElementById('select-all');
+    if (selectAll) {
+      selectAll.checked = boxes.length > 0 && n === boxes.length;
+      selectAll.indeterminate = n > 0 && n < boxes.length;
+    }
+
+    const dlBtn = document.getElementById('download-btn');
+    const dlCount = document.getElementById('download-count');
+    dlBtn.disabled = n === 0;
+    dlCount.textContent = n > 0 ? `(${n})` : '';
 
     const moveBtn = document.getElementById('move-btn');
     const moveCount = document.getElementById('move-count');
@@ -278,12 +310,85 @@
     const deleteCount = document.getElementById('delete-count');
     deleteBtn.disabled = n === 0;
     deleteCount.textContent = n > 0 ? `(${n})` : '';
+
+    // 提示栏切换
+    const hintDefault = document.querySelector('.hint-default');
+    const hintSelected = document.querySelector('.hint-selected');
+    const selectedCount = document.getElementById('selected-count');
+    if (hintDefault && hintSelected) {
+      if (n > 0) {
+        hintDefault.style.display = 'none';
+        hintSelected.style.display = '';
+        selectedCount.textContent = n;
+      } else {
+        hintDefault.style.display = '';
+        hintSelected.style.display = 'none';
+      }
+    }
   }
+
+  function clearSelection() {
+    document.querySelectorAll('.file-check:checked').forEach(cb => { cb.checked = false; });
+    const selectAll = document.getElementById('select-all');
+    if (selectAll) { selectAll.checked = false; selectAll.indeterminate = false; }
+    updateMoveBtn();
+  }
+
+  function onCheckChange(e, cb) {
+    const boxes = Array.from(document.querySelectorAll('.file-check'));
+    const curIdx = boxes.indexOf(cb);
+
+    if (e.shiftKey && _lastCheckIdx >= 0 && _lastCheckIdx !== curIdx) {
+      const lo = Math.min(_lastCheckIdx, curIdx);
+      const hi = Math.max(_lastCheckIdx, curIdx);
+      const newState = cb.checked;
+      for (let i = lo; i <= hi; i++) {
+        boxes[i].checked = newState;
+      }
+    }
+    _lastCheckIdx = curIdx;
+    updateMoveBtn();
+  }
+
   function toggleSelectAll(el) {
     document.querySelectorAll('.file-check').forEach(cb => {
       cb.checked = el.checked;
     });
     updateMoveBtn();
+  }
+
+  /* ── 批量下载 ─────────────────────────────────────────────────────── */
+  async function batchDownload() {
+    const checked = document.querySelectorAll('.file-check:checked');
+    if (checked.length === 0) return;
+    const ids = Array.from(checked).map(cb => cb.value);
+    const btn = document.getElementById('download-btn');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '打包中...';
+    try {
+      const resp = await fetch('/batch-download', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids})
+      });
+      if (!resp.ok) { alert('下载失败'); return; }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const d = new Date();
+      const p = n => String(n).padStart(2,'0');
+      const ts = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}-${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cloud-drive-${ts}-download.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      btn.innerHTML = originalHTML;
+      updateMoveBtn();
+    }
   }
 
   /* ── 批量删除 ─────────────────────────────────────────────────────── */
@@ -460,6 +565,121 @@
     document.getElementById('file-input').files = dt.files;
     form.submit();
   }
+
+  /* ── 框选（rubber band） ─────────────────────────────────────────── */
+  if (!window.__rubberBandInit) { window.__rubberBandInit = true;
+  (function() {
+    const SCROLL_ZONE = 50, SCROLL_MAX = 12;
+
+    let startX = 0, startY = 0, band = null, scrolling = false, curY = 0;
+    let scroller = null;
+
+    function findScroller(e) {
+      const el = e.target.closest('.content');
+      if (!el) return null;
+      if (e.target.closest('.file-actions') || e.target.closest('a') ||
+          e.target.closest('button') || e.target.closest('input')) return null;
+      return el;
+    }
+
+    function rectsOverlap(r1, r2) {
+      return !(r1.right < r2.left || r1.left > r2.right || r1.bottom < r2.top || r1.top > r2.bottom);
+    }
+
+    function updateSelection() {
+      if (!band || !scroller) return;
+      // band 坐标是相对于 scroller 内容的，转成视口坐标做碰撞检测
+      const sr = scroller.getBoundingClientRect();
+      const bTop = parseFloat(band.style.top) - scroller.scrollTop;
+      const bBottom = bTop + parseFloat(band.style.height);
+      const bLeft = parseFloat(band.style.left);
+      const bRight = bLeft + parseFloat(band.style.width);
+      const bandVP = { left: bLeft + sr.left, top: bTop + sr.top, right: bRight + sr.left, bottom: bBottom + sr.top };
+
+      scroller.querySelectorAll('.file-table tbody tr').forEach(tr => {
+        const trRect = tr.getBoundingClientRect();
+        const cb = tr.querySelector('.file-check');
+        if (cb && !cb.checked && rectsOverlap(bandVP, trRect)) cb.checked = true;
+      });
+      updateMoveBtn();
+    }
+
+    function autoScroll() {
+      if (!band || !scrolling || !scroller) return;
+      const sr = scroller.getBoundingClientRect();
+      let dy = 0;
+      if (curY - sr.top < SCROLL_ZONE) {
+        dy = -Math.ceil((SCROLL_ZONE - (curY - sr.top)) / SCROLL_ZONE * SCROLL_MAX);
+      } else if (sr.bottom - curY < SCROLL_ZONE) {
+        dy = Math.ceil((SCROLL_ZONE - (sr.bottom - curY)) / SCROLL_ZONE * SCROLL_MAX);
+      }
+      if (dy) {
+        const oldST = scroller.scrollTop;
+        scroller.scrollTop += dy;
+        if (scroller.scrollTop === oldST) return; // 已到边界，停止
+        const curContentY = curY - sr.top + scroller.scrollTop;
+        const top = Math.min(startY, curContentY);
+        const h = Math.abs(curContentY - startY);
+        band.style.top = top + 'px';
+        band.style.height = h + 'px';
+        updateSelection();
+      }
+      requestAnimationFrame(autoScroll);
+    }
+
+    document.addEventListener('mousedown', function(e) {
+      if (e.button !== 0) return;
+      const el = findScroller(e);
+      if (!el) return;
+      scroller = el;
+
+      // 起始坐标：相对于 scroller 内容
+      const sr = scroller.getBoundingClientRect();
+      startX = e.clientX - sr.left + scroller.scrollLeft;
+      startY = e.clientY - sr.top + scroller.scrollTop;
+      curY = e.clientY;
+
+      const onMove = function(e2) {
+        curY = e2.clientY;
+        const sr2 = scroller.getBoundingClientRect();
+        const curContentX = e2.clientX - sr2.left + scroller.scrollLeft;
+        const curContentY = e2.clientY - sr2.top + scroller.scrollTop;
+        const dx = curContentX - startX, dy = curContentY - startY;
+
+        if (!band && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+
+        if (!band) {
+          band = document.createElement('div');
+          band.id = 'rubber-band';
+          scroller.style.position = 'relative';
+          scroller.appendChild(band);
+          document.body.style.userSelect = 'none';
+          scrolling = true;
+          autoScroll();
+        }
+
+        const x1 = Math.min(startX, curContentX);
+        const y1 = Math.min(startY, curContentY);
+        band.style.left = x1 + 'px';
+        band.style.top = y1 + 'px';
+        band.style.width = Math.abs(dx) + 'px';
+        band.style.height = Math.abs(dy) + 'px';
+        updateSelection();
+      };
+
+      const onUp = function() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (band) { band.remove(); band = null; }
+        document.body.style.userSelect = '';
+        scrolling = false;
+        scroller = null;
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  })(); }
 
   /* ── 文件变化自动刷新（轮询） ──────────────────────────────────── */
   if (!window.__filesPolling) {

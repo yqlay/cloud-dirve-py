@@ -6,10 +6,14 @@
 
 ### 文件管理
 - 上传/下载/删除文件，支持批量操作
+- 批量下载：选中多个文件打包为 zip 一次下载
 - 新建文件夹、文件夹上传、按目录浏览
 - 拖拽上传（拖到页面任意位置自动打开上传弹窗）
 - 文件移动到任意文件夹
 - 文件变化自动刷新（轮询检测，无需手动刷新）
+- **多选方式**：Shift+点击 连选 / 拖拽 框选 / 逐个点击 checkbox
+- 选中行高亮，顶部悬浮栏显示已选数量 + 取消选择按钮
+- 表头 + 选择栏 sticky 悬浮，滚动不消失
 
 ### 远程终端
 - 基于 WebSocket 的真 PTY 终端（pywinpty + xterm.js）
@@ -25,6 +29,7 @@
 - 五种权限：`download`、`upload`、`admin`、`console`、`terminal`
 - 邀请码注册 + 管理员审批（邀请码支持多个，可留空表示开放注册）
 - 普通用户可在线申请权限，super_admin 审批
+- **权限管理页面**：可视化查看所有用户权限，一键授予/撤销（仅 super_admin）
 
 ### 在线管理
 - 实时查看在线用户（IP、活跃时间、角色）
@@ -328,7 +333,8 @@ cloud-drive/
     ├── logs.html           # 操作日志
     ├── admin_terminal.html # 远程终端页面
     ├── admin_online.html   # 在线用户管理
-    ├── admin_registrations.html  # 注册+权限审批
+    ├── admin_registrations.html  # 注册审批
+    ├── admin_permissions.html    # 权限管理
     └── terminal_page.html  # 终端 xterm.js 页面
 ```
 

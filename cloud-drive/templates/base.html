@@ -50,7 +50,7 @@
   .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.78rem; }
 
   /* ── 主布局 ─────────────────────────────────────────────────────── */
-  .layout { display: flex; min-height: 100vh; }
+  .layout { display: flex; height: 100vh; }
   .sidebar {
     width: var(--sidebar-w); background: var(--surface);
     border-right: 1px solid var(--border); padding: 1.25rem 0;
@@ -85,17 +85,32 @@
   /* ── 主内容 ─────────────────────────────────────────────────────── */
   .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
   .topbar {
-    padding: 1rem 1.75rem; border-bottom: 1px solid var(--border);
+    padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
     display: flex; align-items: center; justify-content: space-between;
     background: var(--surface); flex-shrink: 0;
+    position: sticky; top: 0; z-index: 10;
   }
-  .breadcrumb { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
-  .breadcrumb a { color: var(--text-dim); transition: color 0.15s; }
+  .breadcrumb {
+    display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem;
+    min-width: 0; overflow: hidden; white-space: nowrap;
+  }
+  .breadcrumb a { color: var(--text-dim); transition: color 0.15s; flex-shrink: 0; }
   .breadcrumb a:hover { color: var(--accent); }
-  .breadcrumb .sep { color: var(--text-muted); }
-  .breadcrumb .current { color: var(--text); font-weight: 600; }
-  .topbar-actions { display: flex; gap: 0.5rem; }
-  .content { flex: 1; overflow-y: auto; padding: 1.25rem 1.75rem; }
+  .breadcrumb .sep { color: var(--text-muted); flex-shrink: 0; }
+  .breadcrumb .current { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+  .topbar-actions { display: flex; gap: 0.5rem; flex-shrink: 0; margin-left: auto; }
+  .topbar-actions .btn-count { display: inline-block; min-width: 1.8em; text-align: center; }
+  .content { flex: 1; overflow-y: auto; padding: 0 1.25rem 1.25rem; }
+
+  /* ── 自定义滚动条（全局覆盖） ──────────────────────────────────── */
+  *::-webkit-scrollbar { width: 6px !important; height: 6px !important; }
+  *::-webkit-scrollbar-track { background: var(--bg) !important; }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.25) !important; border-radius: 3px !important;
+  }
+  *::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.45) !important; }
+  * { scrollbar-width: thin; scrollbar-color: rgba(99, 102, 241, 0.25) transparent; }
+  .sidebar *::-webkit-scrollbar-track { background: var(--surface) !important; }
 
   /* ── Toast 提示 ─────────────────────────────────────────────────── */
   .toast {
@@ -134,6 +149,40 @@
   }
   .empty-state svg { width: 56px; height: 56px; stroke: var(--border); margin-bottom: 1rem; }
   .empty-state p { font-size: 0.95rem; }
+
+  /* ── 文件选择增强 ──────────────────────────────────────────────── */
+  .file-table tr { transition: background 0.15s; }
+  .file-table tr.selected td {
+    background: rgba(129, 140, 248, 0.08);
+  }
+  .file-table tr.selected td:first-child {
+    border-left: 3px solid var(--accent);
+    padding-left: calc(0.75rem - 3px);
+  }
+  .file-table tr.selected:hover td { background: rgba(129, 140, 248, 0.14); }
+  #rubber-band {
+    position: absolute; border: 1px solid var(--accent);
+    background: rgba(129, 140, 248, 0.12);
+    pointer-events: none; z-index: 50;
+  }
+  .sticky-header { position: sticky; top: 0; z-index: 5; background: var(--bg); }
+  .selection-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.35rem 0; font-size: 0.75rem; color: var(--text-dim);
+    user-select: none; background: var(--bg);
+  }
+  .selection-bar .hint-default { opacity: 0.6; }
+  .selection-bar .hint-selected { display: flex; align-items: center; gap: 0.6rem; }
+  .selection-bar .hint-selected strong { color: var(--accent); }
+  .btn-cancel-select {
+    background: none; border: 1px solid var(--border); border-radius: 4px;
+    color: var(--text-dim); font-size: 0.72rem; padding: 0.15rem 0.5rem;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn-cancel-select:hover { border-color: var(--accent); color: var(--accent); }
+  .file-table thead th {
+    background: var(--bg); border-bottom: 1px solid var(--border);
+  }
 
   /* ── 文件夹树（侧边栏 + 弹窗） ─────────────────────────────────── */
   .folder-tree { padding: 0 0.5rem; }
@@ -298,7 +347,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
       注册审批
     </a>
-    <a href="/admin/permissions">
+    <a href="/admin/permissions" data-page="admin/permissions" onclick="spaNav('admin/permissions'); return false;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       权限管理
     </a>
@@ -437,7 +486,7 @@
       </div>
     </div>
     <!-- SPA 页面缓存（各页面 DOM 存活于此） -->
-    <div id="page-cache" style="display:none; flex:1; flex-direction:column; overflow:auto;"></div>
+    <div id="page-cache" style="display:none; flex:1; flex-direction:column; overflow:hidden;"></div>
   </div>
 </div>
 
@@ -481,6 +530,7 @@
     const map = {
       'files': '/', 'logs': '/logs', 'settings': '/settings',
       'admin/registrations': '/admin/registrations',
+      'admin/permissions': '/admin/permissions',
       'admin/online': '/admin/online', 'admin/terminal': '/admin/terminal',
     };
     return map[slug] || '/';
@@ -556,10 +606,7 @@
       wrapper.setAttribute('data-page', key);
       wrapper.style.display = 'none';
 
-      const tb = document.createElement('div');
-      tb.className = 'topbar';
-      tb.innerHTML = data.topbar || '';
-      wrapper.appendChild(tb);
+      if (data.topbar) wrapper.insertAdjacentHTML('beforeend', data.topbar);
 
       const ct = document.createElement('div');
       ct.className = 'content';
@@ -989,6 +1036,7 @@
     else if (path === '/logs') slug = 'logs';
     else if (path === '/settings') slug = 'settings';
     else if (path === '/admin/registrations') slug = 'admin/registrations';
+    else if (path === '/admin/permissions') slug = 'admin/permissions';
     else if (path === '/admin/online') slug = 'admin/online';
     else if (path.startsWith('/folder/') || path === '/') {
       // 文件页：服务端已渲染，只需标记当前页

@@ -28,7 +28,7 @@ class Logger:
         size_str = format_size(size) if size > 0 else "—"
 
         line = f"[{timestamp}] 用户: {username} | 操作: {action} | 文件: {filename or '—'} | 大小: {size_str}"
-        print(line, file=sys.stdout)
+        print(line, file=sys.stderr)
 
         # 写入日志文件（按天分文件）
         day_file = LOG_DIR / f"{now.strftime('%Y-%m-%d')}.log"

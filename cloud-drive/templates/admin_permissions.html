@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}权限管理 - Cloud Drive{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+  <div class="breadcrumb">
+    <a href="/">根目录</a>
+    <span class="sep">/</span>
+    <span class="current">权限管理</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if msg %}
+<div class="toast">{{ msg }}</div>
+{% endif %}
+
+<div style="margin-bottom:1.5rem;">
+  <h2 style="font-size:1.2rem; font-weight:600; margin-bottom:0.5rem;">权限管理</h2>
+  <p style="color:var(--text-dim); font-size:0.85rem;">管理所有用户的权限。灰色标签为角色自带权限，不可撤销。</p>
+</div>
+
+<div style="display:flex; flex-direction:column; gap:1rem;">
+  {% for u in users %}
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem 1.25rem;">
+    <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.75rem;">
+      <span style="font-weight:600; font-size:1rem;">{{ u.username }}</span>
+      {% if u.role == 'super_admin' %}
+        <span style="font-size:0.72rem; padding:0.15rem 0.5rem; border-radius:4px; background:rgba(239,68,68,0.15); color:#ef4444; font-weight:500;">超级管理员</span>
+      {% elif u.role == 'admin' %}
+        <span style="font-size:0.72rem; padding:0.15rem 0.5rem; border-radius:4px; background:rgba(129,140,248,0.15); color:var(--accent); font-weight:500;">管理员</span>
+      {% else %}
+        <span style="font-size:0.72rem; padding:0.15rem 0.5rem; border-radius:4px; background:var(--surface-2); color:var(--text-dim); font-weight:500;">普通用户</span>
+      {% endif %}
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+      {% for perm in all_permissions %}
+        {% set is_auto = perm in u.auto_perms %}
+        {% set is_granted = perm in u.granted_perms %}
+        {% set has = is_auto or is_granted %}
+        <div style="display:flex; align-items:center; gap:0.35rem; padding:0.3rem 0.65rem; border-radius:6px;
+          {% if is_auto %}background:rgba(129,140,248,0.08); border:1px solid var(--border); opacity:0.6;
+          {% elif is_granted %}background:rgba(129,140,248,0.15); border:1px solid rgba(129,140,248,0.3);
+          {% else %}background:var(--surface-2); border:1px solid var(--border);{% endif %}">
+          <span style="font-size:0.82rem; {% if has %}color:var(--text);{% else %}color:var(--text-muted);{% endif %}">
+            {{ perm_names[perm] }}
+          </span>
+          {% if is_auto %}
+            <span style="font-size:0.65rem; color:var(--text-muted);">角色</span>
+          {% elif is_granted and is_super_admin and u.username != username %}
+            <form action="/admin/revoke/{{ u.username }}/{{ perm }}" method="post" style="margin:0;" onsubmit="return confirm('撤销「{{ u.username }}」的{{ perm_names[perm] }}权限？')">
+              <button type="submit" style="background:none; border:none; cursor:pointer; padding:0; font-size:0.85rem; color:var(--danger); line-height:1;">&times;</button>
+            </form>
+          {% elif not has and is_super_admin %}
+            <form action="/admin/grant/{{ u.username }}/{{ perm }}" method="post" style="margin:0;">
+              <button type="submit" style="background:none; border:none; cursor:pointer; padding:0; font-size:0.85rem; color:var(--success); line-height:1;">+</button>
+            </form>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -47,6 +47,17 @@ app = Flask(__name__)
 sock = Sock(app)
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
+# 控制台日志：同时输出到终端和 logs/console.log
+Path(__file__).parent.joinpath("logs").mkdir(exist_ok=True)
+_clog = logging.getLogger("console")
+_clog.setLevel(logging.INFO)
+_fh = logging.FileHandler(Path(__file__).parent / "logs" / "console.log", "a", "utf-8")
+_fh.setFormatter(logging.Formatter("%(message)s"))
+_clog.addHandler(_fh)
+_sh = logging.StreamHandler()
+_sh.setFormatter(logging.Formatter("%(message)s"))
+_clog.addHandler(_sh)
+
 # 抑制 Werkzeug 访问日志，避免跟控制台输入抢输出
 from werkzeug.serving import WSGIRequestHandler as _WSGIReqHandler
 
@@ -552,6 +563,8 @@ def _execute_console_command(cmd: str, username: str = "") -> str:
     if not cmd:
         return ""
 
+    logger.log(username or "服务端", "控制台命令", cmd[:200])
+
     if cmd.lower() == "/help":
         return (
             "  Cloud Drive 控制台命令\n"
@@ -749,6 +762,7 @@ SPA_PAGE_MAP = {
     "logs":           "logs.html",
     "settings":       "settings.html",
     "admin/registrations": "admin_registrations.html",
+    "admin/permissions": "admin_permissions.html",
     "admin/online":   "admin_online.html",
     "admin/terminal": "admin_terminal.html",
 }
@@ -799,6 +813,28 @@ def api_page(page_name: str):
         ctx["pending_permissions"] = get_pending_permissions()
     elif page_name == "admin/online":
         ctx["online_users"] = get_online_users()
+    elif page_name == "admin/permissions":
+        from auth import get_all_usernames, get_user_role, get_user_permissions, is_super_admin as _isa
+        ctx["is_admin_user"] = True
+        ctx["user_permissions"] = get_user_permissions(session.get("username", ""))
+        ctx["is_super_admin"] = _isa(session.get("username", ""))
+        _all_perms = ["download", "upload", "admin", "console", "terminal"]
+        _auto_map = {
+            "super_admin": {"download", "upload", "admin", "console", "terminal"},
+            "admin": {"download", "upload", "admin"},
+            "user": {"download"},
+        }
+        _pn = {"download": "下载", "upload": "上传", "admin": "管理", "console": "控制台", "terminal": "终端"}
+        _users = []
+        for _un in get_all_usernames():
+            _role = get_user_role(_un)
+            _granted = get_user_permissions(_un)
+            _auto = _auto_map.get(_role, set())
+            _users.append({"username": _un, "role": _role, "granted_perms": _granted, "auto_perms": list(_auto)})
+        ctx["users"] = _users
+        ctx["all_permissions"] = _all_perms
+        ctx["perm_names"] = _pn
+        ctx["msg"] = None
 
     try:
         blocks = _render_blocks(SPA_PAGE_MAP[page_name], **ctx)
@@ -810,6 +846,7 @@ def api_page(page_name: str):
         "logs":           "操作日志 - Cloud Drive",
         "settings":       "设置 - Cloud Drive",
         "admin/registrations": "注册审批 - Cloud Drive",
+        "admin/permissions": "权限管理 - Cloud Drive",
         "admin/online":   "在线用户 - Cloud Drive",
     }.get(page_name, "Cloud Drive")
 
@@ -982,8 +1019,39 @@ def _resolve_cd_path(cwd: str, target: str) -> str | None:
 @app.route("/admin/permissions")
 @admin_required
 def admin_permissions():
-    """权限申请审批页面（与注册审批合并显示）。"""
-    return redirect(url_for("admin_registrations"))
+    """权限管理页面。"""
+    from auth import get_all_usernames, get_user_role, get_user_permissions, is_super_admin
+    all_perms = ["download", "upload", "admin", "console", "terminal"]
+    auto_perms_map = {
+        "super_admin": {"download", "upload", "admin", "console", "terminal"},
+        "admin": {"download", "upload", "admin"},
+        "user": {"download"},
+    }
+    perm_names = {"download": "下载", "upload": "上传", "admin": "管理", "console": "控制台", "terminal": "终端"}
+    users = []
+    for uname in get_all_usernames():
+        role = get_user_role(uname)
+        granted = get_user_permissions(uname)
+        auto = auto_perms_map.get(role, set())
+        users.append({
+            "username": uname,
+            "role": role,
+            "granted_perms": granted,
+            "auto_perms": list(auto),
+        })
+    return render_template(
+        "admin_permissions.html",
+        users=users,
+        all_permissions=all_perms,
+        perm_names=perm_names,
+        is_super_admin=is_super_admin(session.get("username", "")),
+        username=session.get("username", ""),
+        tree=storage.get_folder_tree(),
+        current_path="",
+        is_admin_user=True,
+        user_permissions=get_user_permissions(session.get("username", "")),
+        msg=request.args.get("msg"),
+    )
 
 
 @app.route("/admin/permissions/<action>/<username>/<perm>", methods=["POST"])
@@ -1129,6 +1197,67 @@ def download(file_id):
     logger.log(session.get("username", "未知"), "下载", info["path"], info["size"])
     abs_dir = str(DATA_DIR / Path(info["path"]).parent)
     return send_from_directory(abs_dir, info["name"], as_attachment=True)
+
+
+@app.route("/batch-download", methods=["POST"])
+@permission_required("download")
+def batch_download():
+    """批量下载：将选中文件打包为 zip 返回。"""
+    import io
+    import zipfile
+    from datetime import datetime
+
+    ids = request.json.get("ids", []) if request.is_json else []
+    if not ids:
+        return jsonify({"error": "未选择文件"}), 400
+
+    # 收集有效文件
+    files = []
+    for fid in ids:
+        info = storage.get_file_info(fid)
+        if info and not info.get("is_dir"):
+            abs_path = DATA_DIR / info["path"]
+            if abs_path.exists():
+                files.append((info["name"], abs_path, info.get("size", 0)))
+
+    if not files:
+        return jsonify({"error": "没有可下载的文件"}), 400
+
+    # 处理重名：同名文件加序号
+    seen: dict[str, int] = {}
+    entries: list[tuple[str, Path]] = []
+    for name, abs_path, _ in files:
+        if name in seen:
+            seen[name] += 1
+            stem = Path(name).stem
+            suffix = Path(name).suffix
+            unique_name = f"{stem}_{seen[name]}{suffix}"
+        else:
+            seen[name] = 0
+            unique_name = name
+        entries.append((unique_name, abs_path))
+
+    # 写入 zip
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for arc_name, abs_path in entries:
+            zf.write(abs_path, arc_name)
+    buf.seek(0)
+
+    total_size = sum(s for _, _, s in files)
+    logger.log(
+        session.get("username", "未知"),
+        "批量下载",
+        f"{len(files)} 个文件",
+        total_size,
+    )
+
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return Response(
+        buf.getvalue(),
+        mimetype="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="cloud-drive-{ts}-download.zip"'},
+    )
 
 
 # ── 文件删除 ──────────────────────────────────────────────────────────────────
@@ -1328,12 +1457,12 @@ def get_public_ip() -> str | None:
 
 def _console_input():
     """后台线程：监听控制台输入，发送系统消息或执行管理命令。"""
-    print("  提示: 输入消息后回车，可从服务端发送消息到所有客户端")
-    print("  命令: /quit /online /kick /approve /reject /grant /revoke")
-    print("        /read config    重载用户/权限/邀请码等配置")
-    print("        /read server    重载服务器配置（端口/隧道等）")
-    print("        /restart server 重启整个服务")
-    print("-" * 55)
+    _clog.info("  提示: 输入消息后回车，可从服务端发送消息到所有客户端")
+    _clog.info("  命令: /quit /online /kick /approve /reject /grant /revoke")
+    _clog.info("        /read config    重载用户/权限/邀请码等配置")
+    _clog.info("        /read server    重载服务器配置（端口/隧道等）")
+    _clog.info("        /restart server 重启整个服务")
+    _clog.info("-" * 55)
 
     _pending_confirm = {}  # {命令: 截止时间}，超时自动清除
 
@@ -1347,21 +1476,21 @@ def _console_input():
             if line.lower() == "/quit":
                 if _pending_confirm.get("/quit", 0) > _time.time():
                     _pending_confirm.pop("/quit", None)
-                    print("正在关闭服务...")
+                    _clog.info("正在关闭服务...")
                     os._exit(0)
                 else:
                     _pending_confirm["/quit"] = _time.time() + 30
-                    print("  ⚠ 确认退出？30 秒内再次输入 /quit 确认")
+                    _clog.warning("  ⚠ 确认退出？30 秒内再次输入 /quit 确认")
 
             # ── 查看在线用户 ──
             elif line.lower() == "/online":
                 users = get_online_users()
                 if not users:
-                    print("  当前无在线用户")
+                    _clog.info("  当前无在线用户")
                 else:
-                    print(f"  在线用户 ({len(users)}):")
+                    _clog.info(f"  在线用户 ({len(users)}):")
                     for u in users:
-                        print(f"    {u['username']}  IP:{u['ip']}  {u['last_active']}  角色:{u['role']}")
+                        _clog.info(f"    {u['username']}  IP:{u['ip']}  {u['last_active']}  角色:{u['role']}")
 
             # ── 踢出用户 ──
             elif line.lower().startswith("/kick "):
@@ -1369,28 +1498,28 @@ def _console_input():
                 if target in _online_users:
                     _kicked_users.add(target)
                     _online_users.pop(target, None)
-                    print(f"  已踢出用户: {target}")
+                    _clog.info(f"  已踢出用户: {target}")
                     logger.log("控制台", "强制下线", target)
                 else:
-                    print(f"  用户 {target} 不在线")
+                    _clog.warning(f"  用户 {target} 不在线")
 
             # ── 批准注册 ──
             elif line.lower().startswith("/approve "):
                 target = line[9:].strip()
                 if approve_user(target):
-                    print(f"  已批准注册: {target}")
+                    _clog.info(f"  已批准注册: {target}")
                     logger.log("控制台", "批准注册", target)
                 else:
-                    print(f"  未找到待审批用户: {target}")
+                    _clog.warning(f"  未找到待审批用户: {target}")
 
             # ── 拒绝注册 ──
             elif line.lower().startswith("/reject "):
                 target = line[8:].strip()
                 if reject_user(target):
-                    print(f"  已拒绝注册: {target}")
+                    _clog.info(f"  已拒绝注册: {target}")
                     logger.log("控制台", "拒绝注册", target)
                 else:
-                    print(f"  未找到待审批用户: {target}")
+                    _clog.warning(f"  未找到待审批用户: {target}")
 
             # ── 授予权限 ──
             elif line.lower().startswith("/grant "):
@@ -1399,12 +1528,12 @@ def _console_input():
                     target, perm = parts
                     from auth import grant_permission
                     if grant_permission(target, perm):
-                        print(f"  已授予 {target} 权限: {perm}")
+                        _clog.info(f"  已授予 {target} 权限: {perm}")
                         logger.log("控制台", "授予权限", f"{target} → {perm}")
                     else:
-                        print(f"  授予失败（用户不存在或权限类型无效）")
+                        _clog.warning(f"  授予失败（用户不存在或权限类型无效）")
                 else:
-                    print("  用法: /grant <用户名> <download|upload>")
+                    _clog.info("  用法: /grant <用户名> <download|upload>")
 
             # ── 撤销权限 ──
             elif line.lower().startswith("/revoke "):
@@ -1413,57 +1542,61 @@ def _console_input():
                     target, perm = parts
                     from auth import revoke_permission
                     if revoke_permission(target, perm):
-                        print(f"  已撤销 {target} 权限: {perm}")
+                        _clog.info(f"  已撤销 {target} 权限: {perm}")
                         logger.log("控制台", "撤销权限", f"{target} → {perm}")
                     else:
-                        print(f"  撤销失败")
+                        _clog.warning(f"  撤销失败")
                 else:
-                    print("  用法: /revoke <用户名> <download|upload>")
+                    _clog.info("  用法: /revoke <用户名> <download|upload>")
 
             # ── /read config: 重载非服务端配置 ──
             elif line.lower() == "/read config":
                 try:
                     reload_config()
-                    print("  配置已重新加载（用户、权限、邀请码、上传限制等）")
+                    _clog.info("  配置已重新加载（用户、权限、邀请码、上传限制等）")
                 except Exception as e:
-                    print(f"  重载失败: {e}")
+                    _clog.error(f"  重载失败: {e}")
 
             # ── /read server: 重载服务器配置 ──
             elif line.lower() == "/read server":
                 try:
                     reload_config()
                     if get("self_domain", "enabled", False):
-                        print(f"  服务器配置已重新加载（自定义域名: {get('self_domain', 'domain', '')}）")
+                        _clog.info(f"  服务器配置已重新加载（自定义域名: {get('self_domain', 'domain', '')}）")
                     else:
-                        print("  服务器配置已重新加载")
-                    print("  提示: 快速隧道 URL 不变，修改端口需 /restart server")
+                        _clog.info("  服务器配置已重新加载")
+                    _clog.info("  提示: 快速隧道 URL 不变，修改端口需 /restart server")
                 except Exception as e:
-                    print(f"  重载失败: {e}")
+                    _clog.error(f"  重载失败: {e}")
 
             # ── /restart server: 重启整个服务（双步确认） ──
             elif line.lower() == "/restart server":
                 if _pending_confirm.get("/restart server", 0) > _time.time():
                     _pending_confirm.pop("/restart server", None)
-                    print("  正在重启服务 ...")
+                    _clog.info("  正在重启服务 ...")
                     try:
                         reload_config()
                         subprocess.Popen([sys.executable] + sys.argv)
                         os._exit(0)
                     except Exception as e:
-                        print(f"  重启失败: {e}")
+                        _clog.error(f"  重启失败: {e}")
                 else:
                     _pending_confirm["/restart server"] = _time.time() + 30
-                    print("  ⚠ 确认重启？30 秒内再次输入 /restart server 确认")
+                    _clog.warning("  ⚠ 确认重启？30 秒内再次输入 /restart server 确认")
 
             # ── 普通消息 ──
             else:
                 messenger.send("服务器", line, is_system=True)
-                print(f"  [已发送] {line}")
+                _clog.info(f"  [已发送] {line}")
 
-        except (EOFError, KeyboardInterrupt):
+        except EOFError:
+            _clog.warning("[stdin 已断开，控制台命令不可用，服务继续运行]")
+            _time.sleep(5)
+            continue
+        except KeyboardInterrupt:
             break
         except Exception as e:
-            print(f"  错误: {e}")
+            _clog.error(f"  错误: {e}")
 
 
 def _start_cloudflared(port: int) -> str | None:
@@ -1482,7 +1615,7 @@ def _start_cloudflared(port: int) -> str | None:
         cmd = ["npx", "cloudflared", "tunnel", "--url", f"http://localhost:{port}"]
 
     for attempt in range(1, 4):
-        print(f"  第 {attempt} 次尝试启动隧道 ...")
+        _clog.info(f"  第 {attempt} 次尝试启动隧道 ...")
 
         try:
             with open(log_file, "a", encoding="utf-8") as lf:
@@ -1526,7 +1659,7 @@ def _start_cloudflared(port: int) -> str | None:
         except Exception:
             pass
         if attempt < 3:
-            print(f"  第 {attempt} 次失败，2 秒后重试 ...")
+            _clog.warning(f"  第 {attempt} 次失败，2 秒后重试 ...")
             _time.sleep(2)
 
     return None
@@ -1602,6 +1735,9 @@ def terminal_ws(ws):
         return
 
     # 发送初始数据
+    logger.log(username, "终端连接", sid)
+    _term_start_time = _time.time()
+    _term_close_reason = "断开连接"
     try:
         ws.send(_json.dumps({"type": "session", "session_id": sid}))
         for chunk in history:
@@ -1661,6 +1797,7 @@ def terminal_ws(ws):
             # 闲置超时
             timeout_sec = get("terminal", "timeout_minutes", 40) * 60
             if _time.time() - last_active > timeout_sec:
+                _term_close_reason = "闲置超时"
                 try:
                     ws.send("\r\n\x1b[33m[闲置 40 分钟，连接已断开]\x1b[0m")
                 except Exception:
@@ -1668,11 +1805,16 @@ def terminal_ws(ws):
                 break
             # 读取线程已退出
             if not reader.is_alive():
+                _term_close_reason = "PTY 进程退出"
                 break
     except Exception as e:
+        _term_close_reason = f"异常: {e}"
         logger.log("terminal-ws", "异常", str(e))
     finally:
         stop_event.set()
+        duration = int(_time.time() - _term_start_time)
+        duration_str = f"{duration // 60}分钟" if duration >= 60 else f"{duration}秒"
+        logger.log(username, "终端断开", f"{sid} | 持续: {duration_str} | 原因: {_term_close_reason}")
 
 
 # ── 内网 IP 检测 ────────────────────────────────────────────────────────────────
@@ -1702,9 +1844,9 @@ if __name__ == "__main__":
     innet_url = f"http://{innet_ip}:{port}"
     config_update("server", "innet_ip_url", innet_url)
 
-    print("=" * 55)
-    print(f"  Cloud Drive 启动于 http://{host}:{port}")
-    print(f"  内网访问: {innet_url}")
+    _clog.info("=" * 55)
+    _clog.info(f"  Cloud Drive 启动于 http://{host}:{port}")
+    _clog.info(f"  内网访问: {innet_url}")
 
     # 公网访问
     self_domain_enabled = get("self_domain", "enabled", False)
@@ -1714,28 +1856,28 @@ if __name__ == "__main__":
     if self_domain_enabled and self_domain:
         public_url = f"https://{self_domain}"
         config_update("server", "public_url", public_url)
-        print(f"  公网访问: {public_url}（自定义域名，隧道由系统服务管理）")
+        _clog.info(f"  公网访问: {public_url}（自定义域名，隧道由系统服务管理）")
     elif expose_lan:
-        print("  正在启动快速隧道 ...")
+        _clog.info("  正在启动快速隧道 ...")
         tunnel_url = _start_cloudflared(port)
         if tunnel_url:
             config_update("server", "public_url", tunnel_url)
-            print(f"  公网访问: {tunnel_url}")
+            _clog.info(f"  公网访问: {tunnel_url}")
         else:
             config_update("server", "public_url", None)
-            print("  公网访问: 隧道启动失败")
+            _clog.warning("  公网访问: 隧道启动失败")
     else:
         config_update("server", "public_url", None)
-        print("  公网访问: 未开启（仅内网访问）")
+        _clog.info("  公网访问: 未开启（仅内网访问）")
 
     terminal_on = get("terminal", "enabled", True)
-    print(f"  终端服务: {'已启用（/terminal-ws）' if terminal_on else '未启用'}")
+    _clog.info(f"  终端服务: {'已启用（/terminal-ws）' if terminal_on else '未启用'}")
 
     if users:
-        print(f"  账户: {'、'.join(u['username'] for u in users)} ({len(users)} 个用户)")
+        _clog.info(f"  账户: {'、'.join(u['username'] for u in users)} ({len(users)} 个用户)")
     else:
-        print("  警告: 未配置任何用户！请在 config.json 的 auth.users 中添加用户")
-    print("=" * 55)
+        _clog.warning("  警告: 未配置任何用户！请在 config.json 的 auth.users 中添加用户")
+    _clog.info("=" * 55)
 
     # 启动控制台消息监听线程
     threading.Thread(target=_console_input, daemon=True).start()
